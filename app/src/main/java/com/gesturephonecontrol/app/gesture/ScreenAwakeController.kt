@@ -1,64 +1,42 @@
 package com.gesturephonecontrol.app.gesture
 
 import android.content.Context
-import android.graphics.PixelFormat
-import android.os.Build
-import android.provider.Settings
-import android.view.Gravity
-import android.view.View
-import android.view.WindowManager
+import android.os.PowerManager
 
 /**
- * Keeps the screen from sleeping while gesture detection is running.
+ * Keeps the screen from sleeping while gesture detection is running. A phone that dims out
+ * mid-session defeats the point of hands-free control.
  *
- * A phone that dims out mid-use defeats the point of hands-free control, but a service has no
- * window of its own to set `FLAG_KEEP_SCREEN_ON` on. So this attaches a 1x1 fully transparent,
- * non-interactive overlay window purely to carry that flag — the modern replacement for the
- * deprecated screen wake locks, which are unreliable on recent Android versions.
- *
- * Requires the user to grant "Display over other apps". If they haven't, [acquire] does nothing
- * and detection still works — the screen just sleeps on its usual timeout.
+ * Uses a classic screen wake lock rather than a WindowManager overlay: the overlay approach needs
+ * the user to grant "Display over other apps" as a separate manual step, which is easy to miss —
+ * and silently leaves the screen sleeping with no obvious cause when skipped. A wake lock only
+ * needs the WAKE_LOCK permission, which is normal and granted automatically at install, so there
+ * is no extra step to forget. The API is deprecated but fully functional; it's the standard
+ * pattern e-reader, video, and flashlight apps use for exactly this.
  */
-class ScreenAwakeController(private val context: Context) {
+class ScreenAwakeController(context: Context) {
 
-    private var overlay: View? = null
-
-    fun canKeepScreenOn(): Boolean = Settings.canDrawOverlays(context)
+    private val powerManager = context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+    private var wakeLock: PowerManager.WakeLock? = null
 
     fun acquire() {
-        if (overlay != null || !canKeepScreenOn()) return
-
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_SYSTEM_ALERT
-        }
-
-        val params = WindowManager.LayoutParams(
-            1,
-            1,
-            type,
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-        }
-
-        val view = View(context)
-        runCatching { windowManager().addView(view, params) }
-            .onSuccess { overlay = view }
+        if (wakeLock?.isHeld == true) return
+        @Suppress("DEPRECATION")
+        val lock = powerManager.newWakeLock(
+            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ON_AFTER_RELEASE,
+            "$WAKE_LOCK_TAG:screenOn"
+        )
+        lock.setReferenceCounted(false)
+        lock.acquire()
+        wakeLock = lock
     }
 
     fun release() {
-        val view = overlay ?: return
-        overlay = null
-        runCatching { windowManager().removeView(view) }
+        wakeLock?.let { if (it.isHeld) it.release() }
+        wakeLock = null
     }
 
-    private fun windowManager() =
-        context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private companion object {
+        const val WAKE_LOCK_TAG = "GesturePhoneControl"
+    }
 }

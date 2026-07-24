@@ -54,16 +54,21 @@ cambiar de video).
 
 | Pose | Acción | ¿Se repite al sostener? |
 |---|---|---|
-| **Índice** apuntando **arriba** | Scroll hacia arriba | Sí |
-| **Índice** apuntando **abajo** | Scroll hacia abajo | Sí |
-| **Índice** apuntando a la **izquierda** | Atrás | No |
-| **Índice** apuntando a la **derecha** | Apps recientes | No |
+| **Índice** apuntando **arriba** | Deslizar arriba (scroll) | Sí |
+| **Índice** apuntando **abajo** | Deslizar abajo (scroll) | Sí |
+| **Índice** apuntando a la **izquierda** | Deslizar a la izquierda | Sí |
+| **Índice** apuntando a la **derecha** | Deslizar a la derecha | Sí |
 | **Índice + medio** en "V" | Bajar notificaciones | No |
+| **Mano abierta** (4 dedos) | Atrás | No |
 | **Puño** cerrado | Ir al inicio | No |
 
-Apuntar cubre las cuatro direcciones —el dedo señala a dónde quieres ir— y
-las dos poses de forma cubren el resto. Solo el scroll se repite mientras
-sostienes: así sostener el puño no aporrea el botón de inicio una y otra vez.
+Apuntar dispara un swipe sintético real en esa dirección —igual que un dedo
+real— así que sirve tanto para hacer scroll vertical como para moverte entre
+pestañas/módulos horizontales (como los tabs de TikTok o deslizar entre
+Reels de Instagram). Las tres poses de forma cubren las acciones de sistema
+que no tienen una dirección natural. Solo el deslizamiento se repite
+mientras sostienes: así sostener el puño no aporrea el botón de inicio una y
+otra vez.
 
 ### Tutorial de entrenamiento
 
@@ -106,11 +111,9 @@ de `PoseHoldDetector`.
   a activarlo. Es un paso único por instalación.
 - **La pantalla se mantiene encendida mientras la detección esté activa**,
   porque un teléfono que se apaga a media sesión hace inútil el control sin
-  manos. Eso requiere el permiso "Mostrar sobre otras apps": la app coloca
-  una ventana invisible de 1x1 px cuyo único fin es cargar la bandera
-  `FLAG_KEEP_SCREEN_ON` (un servicio no tiene ventana propia donde ponerla).
-  Si no concedes ese permiso todo lo demás sigue funcionando; la pantalla
-  simplemente se apaga con su tiempo normal. Recuerda **detener la detección**
+  manos. Usa un wake lock de pantalla clásico (`PowerManager.SCREEN_BRIGHT_WAKE_LOCK`)
+  con el permiso `WAKE_LOCK`, que es normal y se concede solo al instalar — no
+  hay ningún paso manual que puedas olvidar. Recuerda **detener la detección**
   cuando no la uses, o la pantalla encendida te consumirá batería.
 - **La cámara corre en segundo plano mientras el servicio esté activo**,
   pero nunca se sube ni se guarda video: los frames se procesan localmente

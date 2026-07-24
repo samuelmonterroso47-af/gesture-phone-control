@@ -202,6 +202,7 @@ private fun poseLabel(pose: HandPoseState) = when (pose) {
         PointDirection.RIGHT -> "a la derecha"
     }
     HandPoseState.TwoFingers -> "índice + medio en \"V\""
+    HandPoseState.OpenPalm -> "mano abierta"
     HandPoseState.Fist -> "puño cerrado"
     HandPoseState.None -> "ninguna reconocida"
 }

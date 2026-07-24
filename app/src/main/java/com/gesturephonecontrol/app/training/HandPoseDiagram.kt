@@ -57,6 +57,7 @@ fun HandPoseDiagram(
         val extendedFingers = when (pose) {
             is HandPoseState.Pointing -> 1
             HandPoseState.TwoFingers -> 2
+            HandPoseState.OpenPalm -> 4
             else -> 0
         }
 

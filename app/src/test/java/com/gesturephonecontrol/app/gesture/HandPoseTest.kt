@@ -77,9 +77,9 @@ class HandPoseTest {
     }
 
     @Test
-    fun `a fully open hand is not a command pose`() {
+    fun `all four fingers extended is OpenPalm`() {
         val pose = HandPose.classify(hand(indexUp = true, middleUp = true, ringUp = true, pinkyUp = true))
-        assertEquals(HandPoseState.None, pose)
+        assertEquals(HandPoseState.OpenPalm, pose)
     }
 
     @Test

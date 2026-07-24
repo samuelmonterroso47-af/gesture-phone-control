@@ -45,11 +45,12 @@ class GestureAccessibilityService : AccessibilityService() {
 
     private fun handle(command: GestureCommand) {
         when (command) {
-            GestureCommand.SCROLL_UP -> dispatchVerticalSwipe(scrollUp = true)
-            GestureCommand.SCROLL_DOWN -> dispatchVerticalSwipe(scrollUp = false)
+            GestureCommand.SWIPE_UP -> dispatchSwipe(dx = 0f, dy = -1f)
+            GestureCommand.SWIPE_DOWN -> dispatchSwipe(dx = 0f, dy = 1f)
+            GestureCommand.SWIPE_LEFT -> dispatchSwipe(dx = -1f, dy = 0f)
+            GestureCommand.SWIPE_RIGHT -> dispatchSwipe(dx = 1f, dy = 0f)
             GestureCommand.NOTIFICATIONS -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
             GestureCommand.BACK -> performGlobalAction(GLOBAL_ACTION_BACK)
-            GestureCommand.RECENTS -> performGlobalAction(GLOBAL_ACTION_RECENTS)
             GestureCommand.HOME -> performGlobalAction(GLOBAL_ACTION_HOME)
         }
         vibrateConfirmation()
@@ -67,18 +68,23 @@ class GestureAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Injects a real synthetic touch swipe, so scrolling works like an actual finger in any app.
-     * Scrolling up means dragging the content upward, i.e. the finger travels bottom → top.
+     * Injects a real synthetic touch swipe, so it works like an actual finger swipe in any app —
+     * scrolling a feed, or switching between horizontal tabs/reels the way TikTok or Instagram do.
+     *
+     * [dx]/[dy] describe which way the *finger* travels, e.g. `dy = -1` is a physical swipe up
+     * (finger moves from the bottom of the screen to the top, dragging content upward); `dx = 1` is
+     * a physical swipe right (finger moves from the left side to the right).
      */
-    private fun dispatchVerticalSwipe(scrollUp: Boolean) {
+    private fun dispatchSwipe(dx: Float, dy: Float) {
         val metrics = resources.displayMetrics
         val centerX = metrics.widthPixels / 2f
-        val startY = if (scrollUp) metrics.heightPixels * 0.8f else metrics.heightPixels * 0.2f
-        val endY = if (scrollUp) metrics.heightPixels * 0.2f else metrics.heightPixels * 0.8f
+        val centerY = metrics.heightPixels / 2f
+        val halfSpanX = metrics.widthPixels * 0.3f
+        val halfSpanY = metrics.heightPixels * 0.3f
 
         val path = Path().apply {
-            moveTo(centerX, startY)
-            lineTo(centerX, endY)
+            moveTo(centerX - dx * halfSpanX, centerY - dy * halfSpanY)
+            lineTo(centerX + dx * halfSpanX, centerY + dy * halfSpanY)
         }
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, SWIPE_DURATION_MS))

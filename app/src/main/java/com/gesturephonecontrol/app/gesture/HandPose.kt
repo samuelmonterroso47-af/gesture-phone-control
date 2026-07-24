@@ -22,6 +22,9 @@ sealed interface HandPoseState {
     /** Index + middle extended in a "V". */
     data object TwoFingers : HandPoseState
 
+    /** All four fingers extended. */
+    data object OpenPalm : HandPoseState
+
     /** All fingers curled. */
     data object Fist : HandPoseState
 
@@ -72,6 +75,7 @@ object HandPose {
             indexUp && !middleUp && !ringUp && !pinkyUp ->
                 HandPoseState.Pointing(indexDirection(landmarks, mirrored))
             indexUp && middleUp && !ringUp && !pinkyUp -> HandPoseState.TwoFingers
+            indexUp && middleUp && ringUp && pinkyUp -> HandPoseState.OpenPalm
             !indexUp && !middleUp && !ringUp && !pinkyUp -> HandPoseState.Fist
             else -> HandPoseState.None
         }
