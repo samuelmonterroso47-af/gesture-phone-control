@@ -66,6 +66,7 @@ dependencies {
     implementation("androidx.camera:camera-core:$cameraxVersion")
     implementation("androidx.camera:camera-camera2:$cameraxVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
 
     // MediaPipe hand landmark detection
     implementation("com.google.mediapipe:tasks-vision:0.10.14")

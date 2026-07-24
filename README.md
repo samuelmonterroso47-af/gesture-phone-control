@@ -18,15 +18,20 @@ separados que se comunican en el mismo proceso:
 Cámara frontal
      │
      ▼
-GestureForegroundService          (CameraX + MediaPipe HandLandmarker)
+HandGesturePipeline                (CameraX + MediaPipe HandLandmarker)
  - Captura frames de la cámara frontal
  - Detecta los 21 landmarks de la mano por frame
  - Calcula el centroide de la palma y su movimiento
-     │  GestureEventBus (in-process, SharedFlow)
-     ▼
-GestureAccessibilityService       (AccessibilityService)
- - performGlobalAction(...)  → notificaciones, atrás, apps recientes
- - dispatchGesture(...)      → swipe sintético real en pantalla (scroll)
+     │  usado por
+     ├── GestureForegroundService (sin preview) → GestureEventBus (in-process, SharedFlow)
+     │                                                    │
+     │                                                    ▼
+     │                                      GestureAccessibilityService (AccessibilityService)
+     │                                       - performGlobalAction(...) → notificaciones, atrás, recientes
+     │                                       - dispatchGesture(...)     → swipe sintético real (scroll)
+     │                                       - vibra al ejecutar cada acción
+     │
+     └── GestureTestScreen (con preview en vivo) → solo muestra estado, no dispara acciones
 ```
 
 - **`GestureClassifier`** (`gesture/GestureClassifier.kt`) es lógica pura sin
@@ -35,6 +40,9 @@ GestureAccessibilityService       (AccessibilityService)
   con un umbral de velocidad/desplazamiento y un cooldown para no disparar
   dos veces el mismo gesto. Tiene tests unitarios en
   `app/src/test/.../GestureClassifierTest.kt`.
+- **`HandGesturePipeline`** (`gesture/HandGesturePipeline.kt`) encapsula la
+  cámara + MediaPipe; la reutilizan tanto el servicio en segundo plano como
+  la pantalla de calibración en pantalla (`GestureTestScreen`).
 
 ### Mapeo de gestos por defecto
 
@@ -77,9 +85,14 @@ el constructor de `GestureClassifier`.
 2. Conecta un teléfono Android físico (con cámara frontal) por USB con
    depuración habilitada, o usa un emulador con soporte de cámara virtual.
 3. Ejecuta la app (▶). Se instalará y abrirá la pantalla principal.
-4. En la app, sigue los 3 pasos: conceder permiso de cámara, activar el
-   servicio de accesibilidad en Ajustes, y presionar "Iniciar detección".
-5. Prueba los gestos frente a la cámara frontal, en cualquier app abierta.
+4. Antes de activar nada del sistema, prueba el botón **"Modo de prueba (ver
+   cámara en vivo)"** — solo necesita el permiso de cámara. Muestra la
+   cámara frontal en vivo con "Mano detectada: sí/no" y el último gesto
+   reconocido, para calibrar sin riesgo de disparar acciones reales.
+5. Cuando estés conforme, sigue los otros pasos: activar el servicio de
+   accesibilidad en Ajustes, y presionar "Iniciar detección".
+6. Prueba los gestos frente a la cámara frontal, en cualquier app abierta.
+   Cada gesto reconocido vibra brevemente como confirmación.
 
 Para correr los tests unitarios de la lógica de clasificación de gestos:
 
@@ -92,18 +105,21 @@ Para correr los tests unitarios de la lógica de clasificación de gestos:
 ```
 app/src/main/java/com/gesturephonecontrol/app/
 ├── MainActivity.kt                       # UI (Compose): permisos, estado, iniciar/detener
+├── GestureTestScreen.kt                  # pantalla de calibración (cámara en vivo)
 ├── gesture/
 │   ├── GestureClassifier.kt              # lógica pura: landmarks -> dirección de swipe
 │   ├── GestureClassifierTest.kt          # (en app/src/test/...)
 │   ├── GestureEventBus.kt                # bus in-process entre los dos servicios
-│   └── GestureForegroundService.kt       # CameraX + MediaPipe HandLandmarker
+│   ├── HandGesturePipeline.kt            # CameraX + MediaPipe HandLandmarker (compartido)
+│   └── GestureForegroundService.kt       # foreground service sin preview
 └── accessibility/
-    └── GestureAccessibilityService.kt    # ejecuta las acciones del sistema
+    └── GestureAccessibilityService.kt    # ejecuta las acciones del sistema + vibración
 ```
 
 ## Próximos pasos sugeridos
 
-- Afinar sensibilidad y mapeo de gestos probando en tu teléfono real.
+- Afinar sensibilidad y mapeo de gestos probando en tu teléfono real (usa el
+  "Modo de prueba" para ver en vivo qué está detectando la cámara).
 - Agregar más gestos (ej. puño cerrado, pellizco) usando los landmarks que
   ya provee MediaPipe.
 - Pantalla de configuración para remapear gestos sin tocar código.

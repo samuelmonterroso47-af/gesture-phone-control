@@ -32,6 +32,7 @@ class MainActivity : ComponentActivity() {
 
     private var hasCameraPermission by mutableStateOf(false)
     private var isAccessibilityEnabled by mutableStateOf(false)
+    private var showTestMode by mutableStateOf(false)
 
     private val requestCameraPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -45,23 +46,28 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    GestureControlScreen(
-                        hasCameraPermission = hasCameraPermission,
-                        isAccessibilityEnabled = isAccessibilityEnabled,
-                        onRequestCameraPermission = { requestCameraPermission.launch(Manifest.permission.CAMERA) },
-                        onOpenAccessibilitySettings = {
-                            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                        },
-                        onStartDetection = {
-                            ContextCompat.startForegroundService(
-                                this,
-                                Intent(this, GestureForegroundService::class.java)
-                            )
-                        },
-                        onStopDetection = {
-                            stopService(Intent(this, GestureForegroundService::class.java))
-                        }
-                    )
+                    if (showTestMode) {
+                        GestureTestScreen(onBack = { showTestMode = false })
+                    } else {
+                        GestureControlScreen(
+                            hasCameraPermission = hasCameraPermission,
+                            isAccessibilityEnabled = isAccessibilityEnabled,
+                            onRequestCameraPermission = { requestCameraPermission.launch(Manifest.permission.CAMERA) },
+                            onOpenAccessibilitySettings = {
+                                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                            },
+                            onStartDetection = {
+                                ContextCompat.startForegroundService(
+                                    this,
+                                    Intent(this, GestureForegroundService::class.java)
+                                )
+                            },
+                            onStopDetection = {
+                                stopService(Intent(this, GestureForegroundService::class.java))
+                            },
+                            onOpenTestMode = { showTestMode = true }
+                        )
+                    }
                 }
             }
         }
@@ -92,7 +98,8 @@ private fun GestureControlScreen(
     onRequestCameraPermission: () -> Unit,
     onOpenAccessibilitySettings: () -> Unit,
     onStartDetection: () -> Unit,
-    onStopDetection: () -> Unit
+    onStopDetection: () -> Unit,
+    onOpenTestMode: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -122,6 +129,10 @@ private fun GestureControlScreen(
         }
         Button(onClick = onStopDetection) { Text("Detener detección") }
 
+        Button(onClick = onOpenTestMode, enabled = hasCameraPermission) {
+            Text("Modo de prueba (ver cámara en vivo)")
+        }
+
         Text(
             "Gestos: deslizar mano abajo = bajar notificaciones · " +
                 "arriba = deslizar/scroll · a un lado = atrás/cambiar app."
@@ -139,7 +150,8 @@ private fun GestureControlScreenPreview() {
             onRequestCameraPermission = {},
             onOpenAccessibilitySettings = {},
             onStartDetection = {},
-            onStopDetection = {}
+            onStopDetection = {},
+            onOpenTestMode = {}
         )
     }
 }

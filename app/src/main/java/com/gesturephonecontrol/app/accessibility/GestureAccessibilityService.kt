@@ -3,6 +3,10 @@ package com.gesturephonecontrol.app.accessibility
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.view.accessibility.AccessibilityEvent
 import com.gesturephonecontrol.app.gesture.GestureDirection
 import com.gesturephonecontrol.app.gesture.GestureEventBus
@@ -48,6 +52,18 @@ class GestureAccessibilityService : AccessibilityService() {
             GestureDirection.LEFT -> performGlobalAction(GLOBAL_ACTION_BACK)
             GestureDirection.RIGHT -> performGlobalAction(GLOBAL_ACTION_RECENTS)
         }
+        vibrateConfirmation()
+    }
+
+    /** Short buzz so the user gets confirmation a gesture fired without having to look at the screen. */
+    private fun vibrateConfirmation() {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(VIBRATOR_SERVICE) as Vibrator
+        }
+        vibrator.vibrate(VibrationEffect.createOneShot(CONFIRMATION_VIBRATION_MS, VibrationEffect.DEFAULT_AMPLITUDE))
     }
 
     /** Injects a real synthetic touch swipe on the screen, so it works like an actual finger swipe in any app. */
@@ -73,5 +89,6 @@ class GestureAccessibilityService : AccessibilityService() {
 
     private companion object {
         const val SWIPE_DURATION_MS = 150L
+        const val CONFIRMATION_VIBRATION_MS = 40L
     }
 }
