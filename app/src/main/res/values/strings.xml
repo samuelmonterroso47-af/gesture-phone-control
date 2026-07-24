@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Gesture Phone Control</string>
+    <string name="accessibility_service_description">Permite que Gesture Phone Control ejecute acciones del sistema (deslizar, atrás, notificaciones) a partir de gestos de mano detectados con la cámara frontal.</string>
+    <string name="notification_channel_name">Detección de gestos</string>
+    <string name="notification_content">Analizando gestos de mano con la cámara frontal</string>
+</resources>
