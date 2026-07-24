@@ -70,11 +70,32 @@ el constructor de `GestureClassifier`.
   Ajustes > Accesibilidad — ninguna app (ni yo) puede activarlo de forma
   remota o automática. La app tiene un botón que te lleva directo a esa
   pantalla.
+- **Android 13+ bloquea permisos sensibles en APKs instalados fuera de Play
+  Store ("restricted settings").** Como este APK lo instalas manualmente
+  (no viene de Play Store), es probable que el interruptor de Accesibilidad
+  aparezca gris/deshabilitado la primera vez. Para habilitarlo: Ajustes >
+  Apps > Gesture Phone Control > menú de 3 puntos (arriba a la derecha) >
+  **"Permitir configuración restringida"**, y luego vuelve a Accesibilidad
+  a activarlo. Es un paso único por instalación.
 - **La cámara corre en segundo plano mientras el servicio esté activo**,
   pero nunca se sube ni se guarda video: los frames se procesan localmente
   en el teléfono para calcular la posición de la mano y se descartan.
 - El mapeo de gestos es un punto de partida razonable, no el único posible;
   espera afinarlo (falsos positivos, sensibilidad) probando en tu teléfono.
+
+## Compilación automática (CI) y flujo de iteración
+
+Cada push a `main` dispara `.github/workflows/build-debug-apk.yml`, que
+compila `app-debug.apk` en un runner de GitHub (con internet completo, sin
+las restricciones del entorno donde se escribió este código) y lo sube como
+artifact. Para bajarlo: pestaña **Actions** del repo → la corrida más
+reciente → sección **Artifacts** al final → descargar y descomprimir.
+
+El debug keystore (`app/debug.keystore`) está fijo y committeado a propósito
+(solo para builds de debug, nunca hagas esto con una llave de release): así
+todas las compilaciones —la tuya en Android Studio y las de CI— comparten la
+misma firma, y puedes instalar una versión nueva **encima** de la anterior
+sin desinstalar primero.
 
 ## Construir y probar en tu equipo
 
