@@ -2,6 +2,7 @@ package com.gesturephonecontrol.app
 
 import android.Manifest
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -27,27 +28,38 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.gesturephonecontrol.app.accessibility.GestureAccessibilityService
 import com.gesturephonecontrol.app.gesture.GestureForegroundService
+import com.gesturephonecontrol.app.training.GestureTrainingScreen
 
 class MainActivity : ComponentActivity() {
 
     private var hasCameraPermission by mutableStateOf(false)
     private var isAccessibilityEnabled by mutableStateOf(false)
-    private var showTestMode by mutableStateOf(false)
+    private var showTraining by mutableStateOf(false)
 
     private val requestCameraPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted -> hasCameraPermission = granted }
+    ) { granted ->
+        hasCameraPermission = granted
+        if (granted && !hasCompletedTraining()) showTraining = true
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         hasCameraPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
             PackageManager.PERMISSION_GRANTED
+        showTraining = hasCameraPermission && !hasCompletedTraining()
 
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    if (showTestMode) {
-                        GestureTestScreen(onBack = { showTestMode = false })
+                    if (showTraining) {
+                        GestureTrainingScreen(
+                            onFinished = {
+                                markTrainingCompleted()
+                                showTraining = false
+                            },
+                            onExit = { showTraining = false }
+                        )
                     } else {
                         GestureControlScreen(
                             hasCameraPermission = hasCameraPermission,
@@ -65,7 +77,7 @@ class MainActivity : ComponentActivity() {
                             onStopDetection = {
                                 stopService(Intent(this, GestureForegroundService::class.java))
                             },
-                            onOpenTestMode = { showTestMode = true }
+                            onOpenTraining = { showTraining = true }
                         )
                     }
                 }
@@ -89,6 +101,18 @@ class MainActivity : ComponentActivity() {
         ) ?: return false
         return enabledServices.split(':').any { ComponentName.unflattenFromString(it) == expected }
     }
+
+    private fun prefs() = getSharedPreferences("gesture_prefs", Context.MODE_PRIVATE)
+
+    private fun hasCompletedTraining() = prefs().getBoolean(KEY_TRAINING_DONE, false)
+
+    private fun markTrainingCompleted() {
+        prefs().edit().putBoolean(KEY_TRAINING_DONE, true).apply()
+    }
+
+    private companion object {
+        const val KEY_TRAINING_DONE = "training_completed"
+    }
 }
 
 @Composable
@@ -99,7 +123,7 @@ private fun GestureControlScreen(
     onOpenAccessibilitySettings: () -> Unit,
     onStartDetection: () -> Unit,
     onStopDetection: () -> Unit,
-    onOpenTestMode: () -> Unit
+    onOpenTraining: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -129,13 +153,13 @@ private fun GestureControlScreen(
         }
         Button(onClick = onStopDetection) { Text("Detener detección") }
 
-        Button(onClick = onOpenTestMode, enabled = hasCameraPermission) {
-            Text("Modo de prueba (ver cámara en vivo)")
+        Button(onClick = onOpenTraining, enabled = hasCameraPermission) {
+            Text("Practicar gestos (tutorial)")
         }
 
         Text(
-            "Gestos: deslizar mano abajo = bajar notificaciones · " +
-                "arriba = deslizar/scroll · a un lado = atrás/cambiar app."
+            "Gestos: índice + medio juntos hacia arriba = scroll · mano abierta abajo = " +
+                "notificaciones · a un lado = atrás / cambiar app."
         )
     }
 }
@@ -151,7 +175,7 @@ private fun GestureControlScreenPreview() {
             onOpenAccessibilitySettings = {},
             onStartDetection = {},
             onStopDetection = {},
-            onOpenTestMode = {}
+            onOpenTraining = {}
         )
     }
 }

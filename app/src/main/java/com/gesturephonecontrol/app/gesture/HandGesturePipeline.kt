@@ -16,7 +16,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.framework.image.MPImage
-import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
@@ -29,12 +28,13 @@ import java.io.ByteArrayOutputStream
  * the in-app calibration screen (with a live preview), so the camera/model setup lives in one
  * place instead of being duplicated.
  *
- * [onHandLandmarks] fires on every frame with the detected hand (or null if none), useful for a
- * "is it seeing my hand" indicator. [onGesture] fires only when a swipe is actually recognized.
+ * [onHandState] fires on every frame with the detected hand's shape (or null if no hand), which
+ * drives the live "is it seeing my hand / is my pose right" feedback in the training screen.
+ * [onGesture] fires only when a swipe is actually recognized.
  */
 class HandGesturePipeline(
     private val context: Context,
-    private val onHandLandmarks: (List<NormalizedLandmark>?) -> Unit = {},
+    private val onHandState: (HandShape?) -> Unit = {},
     private val onGesture: (GestureDirection) -> Unit
 ) {
     private var cameraProvider: ProcessCameraProvider? = null
@@ -106,25 +106,26 @@ class HandGesturePipeline(
         val landmarks = result.landmarks()
         if (landmarks.isEmpty()) {
             classifier.onHandLost()
-            onHandLandmarks(null)
+            onHandState(null)
             return
         }
-        val hand = landmarks[0]
-        onHandLandmarks(hand)
+        val points = landmarks[0].map { Landmark(it.x(), it.y()) }
+        val shape = HandPose.classify(points)
+        onHandState(shape)
 
-        val palmIndices = intArrayOf(0, 5, 9, 13, 17) // wrist + the four MCP knuckles
-        var sumX = 0f
-        var sumY = 0f
-        for (i in palmIndices) {
-            sumX += hand[i].x()
-            sumY += hand[i].y()
+        // Two-finger swipes track the fingertips; everything else tracks the whole palm.
+        val anchor = if (shape == HandShape.TWO_FINGERS) {
+            HandPose.twoFingerAnchor(points)
+        } else {
+            HandPose.palmCentroid(points)
         }
-        val centroidX = sumX / palmIndices.size
-        val centroidY = sumY / palmIndices.size
+
         // Raw front-camera frames aren't mirrored, so flip X: a hand moving to the user's
         // physical right should read as "right", matching how a selfie view looks.
-        val mirroredX = 1f - centroidX
-        val direction = classifier.onPalmCentroid(HandPoint(mirroredX, centroidY, System.currentTimeMillis()))
+        val mirroredX = 1f - anchor.x
+        val direction = classifier.onHandPoint(
+            HandPoint(mirroredX, anchor.y, System.currentTimeMillis(), shape)
+        )
         if (direction != null) {
             onGesture(direction)
         }

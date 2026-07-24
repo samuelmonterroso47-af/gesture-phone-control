@@ -31,27 +31,48 @@ HandGesturePipeline                (CameraX + MediaPipe HandLandmarker)
      │                                       - dispatchGesture(...)     → swipe sintético real (scroll)
      │                                       - vibra al ejecutar cada acción
      │
-     └── GestureTestScreen (con preview en vivo) → solo muestra estado, no dispara acciones
+     └── GestureTrainingScreen (tutorial, con preview en vivo) → solo muestra estado, no dispara acciones
 ```
 
 - **`GestureClassifier`** (`gesture/GestureClassifier.kt`) es lógica pura sin
-  dependencias de Android: recibe la posición del centroide de la palma por
-  frame y decide si hubo un swipe rápido (arriba/abajo/izquierda/derecha),
-  con un umbral de velocidad/desplazamiento y un cooldown para no disparar
-  dos veces el mismo gesto. Tiene tests unitarios en
-  `app/src/test/.../GestureClassifierTest.kt`.
+  dependencias de Android: recibe la posición del punto rastreado por frame y
+  decide si hubo un swipe rápido (arriba/abajo/izquierda/derecha), con un
+  umbral de velocidad/desplazamiento y un cooldown para no disparar dos veces
+  el mismo gesto.
+- **`HandPose`** (`gesture/HandPose.kt`) también es lógica pura: clasifica la
+  forma de la mano a partir de los 21 landmarks (¿índice y medio extendidos
+  con anular y meñique doblados?) y calcula el punto a rastrear.
 - **`HandGesturePipeline`** (`gesture/HandGesturePipeline.kt`) encapsula la
   cámara + MediaPipe; la reutilizan tanto el servicio en segundo plano como
-  la pantalla de calibración en pantalla (`GestureTestScreen`).
+  la pantalla de entrenamiento.
 
 ### Mapeo de gestos por defecto
 
 | Gesto (mano) | Acción                                   |
 |---|---|
-| Deslizar **abajo** | Baja el panel de notificaciones |
-| Deslizar **arriba** | Swipe sintético hacia arriba (scroll/deslizar dentro de la app activa) |
-| Deslizar a un **lado (izquierda)** | Atrás |
-| Deslizar a un **lado (derecha)** | Apps recientes / cambiar de vista |
+| **Índice + medio juntos**, deslizar **arriba** | Swipe sintético hacia arriba (scroll dentro de la app activa) |
+| Mano abierta, deslizar **abajo** | Baja el panel de notificaciones |
+| Mano abierta, deslizar a la **izquierda** | Atrás |
+| Mano abierta, deslizar a la **derecha** | Apps recientes / cambiar de vista |
+
+El gesto de "arriba" exige deliberadamente la seña de dos dedos (índice +
+medio extendidos, anular y meñique doblados): levantar la mano frente a la
+cámara es algo que uno hace todo el tiempo sin querer, así que sin una seña
+explícita ese gesto se dispararía solo. Los otros tres, al ser movimientos
+menos frecuentes de forma accidental, funcionan con la mano abierta.
+
+### Tutorial de entrenamiento
+
+La primera vez que abres la app (con permiso de cámara concedido) entra
+automáticamente al tutorial guiado: enseña un gesto a la vez, con un diagrama
+animado de la seña y el movimiento correcto, la cámara en vivo al lado, y un
+semáforo de estado ("no veo tu mano" / "veo tu mano pero no la seña" /
+"¡listo, haz el movimiento!"). Cada gesto pide 3 repeticiones correctas antes
+de avanzar. Durante el tutorial **no se ejecuta ninguna acción real** del
+sistema, así que puedes practicar sin miedo. Se puede repetir cuando quieras
+con el botón "Practicar gestos (tutorial)" en la pantalla principal.
+
+### Cómo cambiar el mapeo
 
 Este mapeo es una decisión de diseño, no algo fijo — se cambia en
 `GestureAccessibilityService.handle()` (un `when` sobre `GestureDirection`).
@@ -106,10 +127,9 @@ sin desinstalar primero.
 2. Conecta un teléfono Android físico (con cámara frontal) por USB con
    depuración habilitada, o usa un emulador con soporte de cámara virtual.
 3. Ejecuta la app (▶). Se instalará y abrirá la pantalla principal.
-4. Antes de activar nada del sistema, prueba el botón **"Modo de prueba (ver
-   cámara en vivo)"** — solo necesita el permiso de cámara. Muestra la
-   cámara frontal en vivo con "Mano detectada: sí/no" y el último gesto
-   reconocido, para calibrar sin riesgo de disparar acciones reales.
+4. La primera vez entra solo al **tutorial guiado** (solo necesita permiso de
+   cámara). Practica ahí los 4 gestos hasta que te salgan naturales; no
+   dispara ninguna acción real del sistema.
 5. Cuando estés conforme, sigue los otros pasos: activar el servicio de
    accesibilidad en Ajustes, y presionar "Iniciar detección".
 6. Prueba los gestos frente a la cámara frontal, en cualquier app abierta.
@@ -126,21 +146,26 @@ Para correr los tests unitarios de la lógica de clasificación de gestos:
 ```
 app/src/main/java/com/gesturephonecontrol/app/
 ├── MainActivity.kt                       # UI (Compose): permisos, estado, iniciar/detener
-├── GestureTestScreen.kt                  # pantalla de calibración (cámara en vivo)
 ├── gesture/
-│   ├── GestureClassifier.kt              # lógica pura: landmarks -> dirección de swipe
-│   ├── GestureClassifierTest.kt          # (en app/src/test/...)
+│   ├── GestureClassifier.kt              # lógica pura: movimiento -> dirección de swipe
+│   ├── HandPose.kt                       # lógica pura: landmarks -> forma de la mano
 │   ├── GestureEventBus.kt                # bus in-process entre los dos servicios
 │   ├── HandGesturePipeline.kt            # CameraX + MediaPipe HandLandmarker (compartido)
 │   └── GestureForegroundService.kt       # foreground service sin preview
+├── training/
+│   ├── GestureLesson.kt                  # contenido del tutorial (pasos e instrucciones)
+│   ├── HandPoseDiagram.kt                # diagrama animado de la seña y el movimiento
+│   └── GestureTrainingScreen.kt          # pantalla de práctica guiada
 └── accessibility/
     └── GestureAccessibilityService.kt    # ejecuta las acciones del sistema + vibración
+
+app/src/test/.../gesture/                 # tests unitarios de GestureClassifier y HandPose
 ```
 
 ## Próximos pasos sugeridos
 
 - Afinar sensibilidad y mapeo de gestos probando en tu teléfono real (usa el
-  "Modo de prueba" para ver en vivo qué está detectando la cámara).
+  tutorial para ver en vivo qué está detectando la cámara).
 - Agregar más gestos (ej. puño cerrado, pellizco) usando los landmarks que
   ya provee MediaPipe.
 - Pantalla de configuración para remapear gestos sin tocar código.
