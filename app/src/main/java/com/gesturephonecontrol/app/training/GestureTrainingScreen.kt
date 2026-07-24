@@ -163,7 +163,7 @@ fun GestureTrainingScreen(onFinished: () -> Unit, onExit: () -> Unit) {
                     onClick = {
                         lessonIndex += 1
                         reps = 0
-                        lastWrongGesture = null
+                        lastWrongCommand = null
                     }
                 ) { Text("Saltar este gesto") }
             } else {
