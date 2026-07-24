@@ -40,14 +40,15 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.gesturephonecontrol.app.gesture.GestureDirection
-import com.gesturephonecontrol.app.gesture.GestureEvent
+import com.gesturephonecontrol.app.gesture.GESTURE_COMMANDS
+import com.gesturephonecontrol.app.gesture.GestureCommand
 import com.gesturephonecontrol.app.gesture.HandGesturePipeline
-import com.gesturephonecontrol.app.gesture.HandShape
+import com.gesturephonecontrol.app.gesture.HandPoseState
+import com.gesturephonecontrol.app.gesture.PointDirection
 
 /**
- * Guided tutorial: walks through each gesture one at a time, showing the exact hand pose and motion
- * to make, with the live camera and a rep counter. Nothing here touches
+ * Guided tutorial: walks through each pose one at a time, showing the exact hand shape to hold,
+ * with the live camera and a rep counter. Nothing here touches
  * [com.gesturephonecontrol.app.gesture.GestureEventBus], so practising never fires real system
  * actions — the user can drill safely before turning detection on.
  */
@@ -59,19 +60,19 @@ fun GestureTrainingScreen(onFinished: () -> Unit, onExit: () -> Unit) {
 
     var lessonIndex by remember { mutableIntStateOf(0) }
     var reps by remember { mutableIntStateOf(0) }
-    var handShape by remember { mutableStateOf<HandShape?>(null) }
-    var lastWrongGesture by remember { mutableStateOf<GestureEvent?>(null) }
+    var handPose by remember { mutableStateOf<HandPoseState?>(null) }
+    var lastWrongCommand by remember { mutableStateOf<GestureCommand?>(null) }
 
     val lesson = GESTURE_LESSONS[lessonIndex]
 
     DisposableEffect(Unit) {
         val pipeline = HandGesturePipeline(
             context = context.applicationContext,
-            onHandState = { shape -> handShape = shape },
-            onGesture = { event ->
+            onHandState = { pose -> handPose = pose },
+            onCommand = { command ->
                 val current = GESTURE_LESSONS[lessonIndex]
-                if (event == current.event) {
-                    lastWrongGesture = null
+                if (command == GESTURE_COMMANDS[current.pose]) {
+                    lastWrongCommand = null
                     reps += 1
                     vibrate(context, 40)
                     if (reps >= current.repsToPass) {
@@ -83,7 +84,7 @@ fun GestureTrainingScreen(onFinished: () -> Unit, onExit: () -> Unit) {
                         }
                     }
                 } else {
-                    lastWrongGesture = event
+                    lastWrongCommand = command
                 }
             }
         )
@@ -108,8 +109,7 @@ fun GestureTrainingScreen(onFinished: () -> Unit, onExit: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             HandPoseDiagram(
-                direction = lesson.event.direction,
-                requiredShape = lesson.event.shape,
+                pose = lesson.pose,
                 modifier = Modifier
                     .weight(1f)
                     .aspectRatio(1f)
@@ -124,19 +124,17 @@ fun GestureTrainingScreen(onFinished: () -> Unit, onExit: () -> Unit) {
             }
         }
 
-        Text(text = "1. " + lesson.poseInstruction)
-        Text(text = "2. " + lesson.motionInstruction)
+        Text(text = lesson.instruction)
         Text(
             text = "Acción real: " + lesson.actionLabel,
             style = MaterialTheme.typography.bodySmall
         )
 
-        HandStatusRow(handShape = handShape, requiredShape = lesson.event.shape)
+        HandStatusRow(handPose = handPose, requiredPose = lesson.pose)
 
-        lastWrongGesture?.let {
+        lastWrongCommand?.let {
             Text(
-                text = "Detecté ${shapeLabel(it.shape)} hacia ${directionLabel(it.direction)}. " +
-                    "Intenta de nuevo, más recto y más rápido.",
+                text = "Detecté \"${it.label}\". Ajusta la pose e inténtalo de nuevo.",
                 color = Color(0xFFD08A00),
                 style = MaterialTheme.typography.bodySmall
             )
@@ -176,12 +174,12 @@ fun GestureTrainingScreen(onFinished: () -> Unit, onExit: () -> Unit) {
 }
 
 @Composable
-private fun HandStatusRow(handShape: HandShape?, requiredShape: HandShape) {
+private fun HandStatusRow(handPose: HandPoseState?, requiredPose: HandPoseState) {
     val (label, color) = when {
-        handShape == null -> "No veo tu mano — acércala a la cámara frontal" to Color(0xFFB00020)
-        handShape != requiredShape ->
-            "Veo tu mano, pero aún no la seña: ${shapeLabel(requiredShape)}" to Color(0xFFD08A00)
-        else -> "¡Listo! Ahora haz el movimiento" to Color(0xFF1B873F)
+        handPose == null -> "No veo tu mano — acércala a la cámara frontal" to Color(0xFFB00020)
+        handPose != requiredPose ->
+            "Veo tu mano, pero aún no la pose: ${poseLabel(requiredPose)}" to Color(0xFFD08A00)
+        else -> "¡Pose correcta! Sostenla" to Color(0xFF1B873F)
     }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -196,18 +194,16 @@ private fun HandStatusRow(handShape: HandShape?, requiredShape: HandShape) {
     }
 }
 
-private fun directionLabel(direction: GestureDirection) = when (direction) {
-    GestureDirection.UP -> "arriba"
-    GestureDirection.DOWN -> "abajo"
-    GestureDirection.LEFT -> "la izquierda"
-    GestureDirection.RIGHT -> "la derecha"
-}
-
-private fun shapeLabel(shape: HandShape) = when (shape) {
-    HandShape.TWO_FINGERS -> "dos dedos (índice + medio)"
-    HandShape.OPEN_PALM -> "mano abierta"
-    HandShape.FIST -> "puño cerrado"
-    HandShape.OTHER -> "una seña no reconocida"
+private fun poseLabel(pose: HandPoseState) = when (pose) {
+    is HandPoseState.Pointing -> "índice apuntando " + when (pose.direction) {
+        PointDirection.UP -> "arriba"
+        PointDirection.DOWN -> "abajo"
+        PointDirection.LEFT -> "a la izquierda"
+        PointDirection.RIGHT -> "a la derecha"
+    }
+    HandPoseState.TwoFingers -> "índice + medio en \"V\""
+    HandPoseState.Fist -> "puño cerrado"
+    HandPoseState.None -> "ninguna reconocida"
 }
 
 private fun vibrate(context: android.content.Context, durationMs: Long) {

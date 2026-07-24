@@ -1,28 +1,41 @@
 package com.gesturephonecontrol.app.gesture
 
+import kotlin.math.abs
+
 /**
  * A single hand's 21 landmarks reduced to plain normalized coordinates, so pose logic stays
  * testable without MediaPipe types. Index order follows MediaPipe's hand landmark model.
  */
 data class Landmark(val x: Float, val y: Float)
 
-enum class HandShape {
-    /** Index + middle extended, ring + pinky curled — the deliberate "two fingers" pose. */
-    TWO_FINGERS,
+enum class PointDirection { UP, DOWN, LEFT, RIGHT }
 
-    /** All four fingers extended. */
-    OPEN_PALM,
+/**
+ * A hand pose the app recognizes as a command trigger. Poses are held, not swiped: the user points
+ * or makes a shape and keeps it steady, which is far less tiring than a full-arm motion and works
+ * while their hands are busy.
+ */
+sealed interface HandPoseState {
+    /** Index finger alone, extended, pointing in [direction]. */
+    data class Pointing(val direction: PointDirection) : HandPoseState
 
-    /** All four fingers curled. */
-    FIST,
+    /** Index + middle extended in a "V". */
+    data object TwoFingers : HandPoseState
 
-    /** Any other combination — tracked for motion, but not a command pose. */
-    OTHER
+    /** All fingers curled. */
+    data object Fist : HandPoseState
+
+    /** A hand is visible but isn't holding any recognized pose. */
+    data object None : HandPoseState
 }
 
 /**
- * Classifies the hand's shape from its landmarks, so a gesture can require a deliberate pose
- * (two fingers up) instead of firing on any hand movement that happens to pass the camera.
+ * Classifies the hand's pose from its landmarks.
+ *
+ * The key signal for a pointing pose is the finger's *orientation* — the vector from its base
+ * knuckle to its tip — not where the hand sits in the frame. When someone points up and then
+ * rotates to point sideways, the hand barely moves through space, so tracking hand position would
+ * miss the change entirely.
  *
  * MediaPipe landmark indices used here:
  *  - 0 wrist
@@ -30,13 +43,11 @@ enum class HandShape {
  *  - 9/10/12  middle MCP / PIP / tip
  *  - 13/14/16 ring MCP / PIP / tip
  *  - 17/18/20 pinky MCP / PIP / tip
- *
- * A finger counts as extended when its tip is farther from the wrist than its PIP joint. This is
- * orientation-agnostic (works with the hand tilted), unlike comparing raw y values.
  */
 object HandPose {
 
     private const val WRIST = 0
+    private const val INDEX_MCP = 5
 
     private data class Finger(val pip: Int, val tip: Int)
 
@@ -45,8 +56,12 @@ object HandPose {
     private val RING = Finger(pip = 14, tip = 16)
     private val PINKY = Finger(pip = 18, tip = 20)
 
-    fun classify(landmarks: List<Landmark>): HandShape {
-        if (landmarks.size < 21) return HandShape.OTHER
+    /**
+     * @param mirrored whether x coordinates are already flipped to match a selfie view, so that
+     * "the user's right" reads as [PointDirection.RIGHT].
+     */
+    fun classify(landmarks: List<Landmark>, mirrored: Boolean = true): HandPoseState {
+        if (landmarks.size < 21) return HandPoseState.None
 
         val indexUp = isExtended(landmarks, INDEX)
         val middleUp = isExtended(landmarks, MIDDLE)
@@ -54,33 +69,29 @@ object HandPose {
         val pinkyUp = isExtended(landmarks, PINKY)
 
         return when {
-            indexUp && middleUp && !ringUp && !pinkyUp -> HandShape.TWO_FINGERS
-            indexUp && middleUp && ringUp && pinkyUp -> HandShape.OPEN_PALM
-            !indexUp && !middleUp && !ringUp && !pinkyUp -> HandShape.FIST
-            else -> HandShape.OTHER
+            indexUp && !middleUp && !ringUp && !pinkyUp ->
+                HandPoseState.Pointing(indexDirection(landmarks, mirrored))
+            indexUp && middleUp && !ringUp && !pinkyUp -> HandPoseState.TwoFingers
+            !indexUp && !middleUp && !ringUp && !pinkyUp -> HandPoseState.Fist
+            else -> HandPoseState.None
         }
     }
 
-    /** Midpoint between the index and middle fingertips — the anchor point a two-finger swipe tracks. */
-    fun twoFingerAnchor(landmarks: List<Landmark>): Landmark {
-        val indexTip = landmarks[INDEX.tip]
-        val middleTip = landmarks[MIDDLE.tip]
-        return Landmark(
-            x = (indexTip.x + middleTip.x) / 2f,
-            y = (indexTip.y + middleTip.y) / 2f
-        )
-    }
+    /**
+     * Which way the index finger points, from its base knuckle to its tip. Note screen y grows
+     * downward, so a finger pointing up has a negative dy.
+     */
+    fun indexDirection(landmarks: List<Landmark>, mirrored: Boolean = true): PointDirection {
+        val base = landmarks[INDEX_MCP]
+        val tip = landmarks[INDEX.tip]
+        val dx = (tip.x - base.x).let { if (mirrored) -it else it }
+        val dy = tip.y - base.y
 
-    /** Centroid of wrist + the four MCP knuckles — a stable anchor for whole-hand motion. */
-    fun palmCentroid(landmarks: List<Landmark>): Landmark {
-        val palmIndices = intArrayOf(0, 5, 9, 13, 17)
-        var sumX = 0f
-        var sumY = 0f
-        for (i in palmIndices) {
-            sumX += landmarks[i].x
-            sumY += landmarks[i].y
+        return if (abs(dy) >= abs(dx)) {
+            if (dy < 0) PointDirection.UP else PointDirection.DOWN
+        } else {
+            if (dx > 0) PointDirection.RIGHT else PointDirection.LEFT
         }
-        return Landmark(sumX / palmIndices.size, sumY / palmIndices.size)
     }
 
     private fun isExtended(landmarks: List<Landmark>, finger: Finger): Boolean {

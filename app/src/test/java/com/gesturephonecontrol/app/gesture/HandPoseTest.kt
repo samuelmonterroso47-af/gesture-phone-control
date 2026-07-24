@@ -6,65 +6,84 @@ import org.junit.Test
 class HandPoseTest {
 
     /**
-     * Builds an upright hand with the wrist at the bottom. Each finger is given a PIP and a tip;
-     * an extended finger's tip sits farther from the wrist than its PIP, a curled one's doesn't.
+     * Builds a 21-landmark hand. The wrist sits at the bottom; each finger's tip is placed either
+     * beyond its PIP joint (extended) or short of it (curled), matching how [HandPose] decides.
+     * [indexTip] lets a test aim the index finger somewhere specific.
      */
     private fun hand(
         indexUp: Boolean,
         middleUp: Boolean,
         ringUp: Boolean,
-        pinkyUp: Boolean
+        pinkyUp: Boolean,
+        indexTip: Landmark? = null
     ): List<Landmark> {
-        val points = MutableList(21) { Landmark(0.5f, 0.9f) }
-        points[0] = Landmark(0.5f, 0.9f) // wrist
+        val marks = MutableList(21) { Landmark(0.5f, 0.9f) }
+        marks[0] = Landmark(0.5f, 0.9f) // wrist
+        marks[5] = Landmark(0.44f, 0.7f) // index MCP
 
-        fun setFinger(x: Float, pip: Int, tip: Int, extended: Boolean) {
-            points[pip] = Landmark(x, 0.6f)
-            points[tip] = Landmark(x, if (extended) 0.3f else 0.7f)
+        fun place(pip: Int, tip: Int, x: Float, extended: Boolean) {
+            marks[pip] = Landmark(x, 0.6f)
+            marks[tip] = Landmark(x, if (extended) 0.4f else 0.75f)
         }
+        place(6, 8, 0.44f, indexUp)
+        place(10, 12, 0.50f, middleUp)
+        place(14, 16, 0.56f, ringUp)
+        place(18, 20, 0.62f, pinkyUp)
 
-        setFinger(0.40f, pip = 6, tip = 8, extended = indexUp)
-        setFinger(0.47f, pip = 10, tip = 12, extended = middleUp)
-        setFinger(0.54f, pip = 14, tip = 16, extended = ringUp)
-        setFinger(0.61f, pip = 18, tip = 20, extended = pinkyUp)
-
-        return points
+        if (indexTip != null) marks[8] = indexTip
+        return marks
     }
 
     @Test
-    fun `index and middle extended with others curled is TWO_FINGERS`() {
-        val shape = HandPose.classify(hand(indexUp = true, middleUp = true, ringUp = false, pinkyUp = false))
-        assertEquals(HandShape.TWO_FINGERS, shape)
+    fun `index alone pointing up is Pointing UP`() {
+        val pose = HandPose.classify(hand(indexUp = true, middleUp = false, ringUp = false, pinkyUp = false))
+        assertEquals(HandPoseState.Pointing(PointDirection.UP), pose)
     }
 
     @Test
-    fun `all four fingers extended is OPEN_PALM`() {
-        val shape = HandPose.classify(hand(indexUp = true, middleUp = true, ringUp = true, pinkyUp = true))
-        assertEquals(HandShape.OPEN_PALM, shape)
+    fun `index alone pointing down is Pointing DOWN`() {
+        // Tip below the MCP joint, still far enough from the wrist to count as extended.
+        val pose = HandPose.classify(
+            hand(
+                indexUp = true, middleUp = false, ringUp = false, pinkyUp = false,
+                indexTip = Landmark(0.44f, 0.95f)
+            )
+        )
+        assertEquals(HandPoseState.Pointing(PointDirection.DOWN), pose)
     }
 
     @Test
-    fun `all four fingers curled is FIST`() {
-        val shape = HandPose.classify(hand(indexUp = false, middleUp = false, ringUp = false, pinkyUp = false))
-        assertEquals(HandShape.FIST, shape)
+    fun `a horizontal index reads as a sideways point, not up or down`() {
+        // Mirrored: tip further left in raw coords becomes the user's RIGHT.
+        val pose = HandPose.classify(
+            hand(
+                indexUp = true, middleUp = false, ringUp = false, pinkyUp = false,
+                indexTip = Landmark(0.10f, 0.68f)
+            )
+        )
+        assertEquals(HandPoseState.Pointing(PointDirection.RIGHT), pose)
     }
 
     @Test
-    fun `a single index finger is not a command pose`() {
-        val shape = HandPose.classify(hand(indexUp = true, middleUp = false, ringUp = false, pinkyUp = false))
-        assertEquals(HandShape.OTHER, shape)
+    fun `index and middle extended is TwoFingers`() {
+        val pose = HandPose.classify(hand(indexUp = true, middleUp = true, ringUp = false, pinkyUp = false))
+        assertEquals(HandPoseState.TwoFingers, pose)
+    }
+
+    @Test
+    fun `all fingers curled is Fist`() {
+        val pose = HandPose.classify(hand(indexUp = false, middleUp = false, ringUp = false, pinkyUp = false))
+        assertEquals(HandPoseState.Fist, pose)
+    }
+
+    @Test
+    fun `a fully open hand is not a command pose`() {
+        val pose = HandPose.classify(hand(indexUp = true, middleUp = true, ringUp = true, pinkyUp = true))
+        assertEquals(HandPoseState.None, pose)
     }
 
     @Test
     fun `incomplete landmark list is not a command pose`() {
-        assertEquals(HandShape.OTHER, HandPose.classify(listOf(Landmark(0.5f, 0.5f))))
-    }
-
-    @Test
-    fun `two finger anchor sits between the index and middle tips`() {
-        val points = hand(indexUp = true, middleUp = true, ringUp = false, pinkyUp = false)
-        val anchor = HandPose.twoFingerAnchor(points)
-        assertEquals(0.435f, anchor.x, 0.001f)
-        assertEquals(0.3f, anchor.y, 0.001f)
+        assertEquals(HandPoseState.None, HandPose.classify(listOf(Landmark(0.5f, 0.5f))))
     }
 }

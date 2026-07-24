@@ -28,18 +28,18 @@ import java.io.ByteArrayOutputStream
  * the in-app calibration screen (with a live preview), so the camera/model setup lives in one
  * place instead of being duplicated.
  *
- * [onHandState] fires on every frame with the detected hand's shape (or null if no hand), which
+ * [onHandState] fires on every frame with the detected hand's pose (or null if no hand), which
  * drives the live "is it seeing my hand / is my pose right" feedback in the training screen.
- * [onGesture] fires only when a swipe is actually recognized.
+ * [onCommand] fires only once a pose has been held long enough to count.
  */
 class HandGesturePipeline(
     private val context: Context,
-    private val onHandState: (HandShape?) -> Unit = {},
-    private val onGesture: (GestureEvent) -> Unit
+    private val onHandState: (HandPoseState?) -> Unit = {},
+    private val onCommand: (GestureCommand) -> Unit
 ) {
     private var cameraProvider: ProcessCameraProvider? = null
     private var handLandmarker: HandLandmarker? = null
-    private val classifier = GestureClassifier()
+    private val detector = PoseHoldDetector()
 
     /** Starts the camera bound to [lifecycleOwner]. Pass a [previewSurfaceProvider] to also show a live preview. */
     fun start(lifecycleOwner: LifecycleOwner, previewSurfaceProvider: Preview.SurfaceProvider? = null) {
@@ -105,30 +105,21 @@ class HandGesturePipeline(
     private fun onHandResult(result: HandLandmarkerResult, input: MPImage) {
         val landmarks = result.landmarks()
         if (landmarks.isEmpty()) {
-            classifier.onHandLost()
+            detector.reset()
             onHandState(null)
             return
         }
         val points = landmarks[0].map { Landmark(it.x(), it.y()) }
-        val shape = HandPose.classify(points)
-        onHandState(shape)
+        // Raw front-camera frames aren't mirrored, so HandPose flips x internally: pointing to the
+        // user's physical right should read as RIGHT, matching how a selfie view looks.
+        val pose = HandPose.classify(points, mirrored = true)
+        onHandState(pose)
 
-        // Two-finger swipes track the fingertips; everything else tracks the whole palm.
-        val anchor = if (shape == HandShape.TWO_FINGERS) {
-            HandPose.twoFingerAnchor(points)
-        } else {
-            HandPose.palmCentroid(points)
-        }
-
-        // Raw front-camera frames aren't mirrored, so flip X: a hand moving to the user's
-        // physical right should read as "right", matching how a selfie view looks.
-        val mirroredX = 1f - anchor.x
-        val event = classifier.onHandPoint(
-            HandPoint(mirroredX, anchor.y, System.currentTimeMillis(), shape)
-        )
-        if (event != null) {
-            onGesture(event)
-        }
+        val fire = detector.onPose(pose, System.currentTimeMillis()) ?: return
+        val command = commandFor(fire.pose) ?: return
+        // Holding a fist shouldn't slam the home button repeatedly; only scrolling repeats.
+        if (fire.isRepeat && !command.repeatable) return
+        onCommand(command)
     }
 
     /** Converts a YUV_420_888 [ImageProxy] to an upright RGB [Bitmap], correcting sensor rotation. */

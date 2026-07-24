@@ -11,156 +11,124 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
-import com.gesturephonecontrol.app.gesture.GestureDirection
-import com.gesturephonecontrol.app.gesture.HandShape
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import com.gesturephonecontrol.app.gesture.HandPoseState
+import com.gesturephonecontrol.app.gesture.PointDirection
 
 /**
- * Animated diagram of the hand pose and swipe direction a lesson expects. The whole drawing slides
- * back and forth along the gesture's axis so the required motion reads at a glance, without needing
- * video assets.
+ * Diagram of the pose a lesson expects. Poses are held rather than swiped, so instead of animating
+ * a motion path this draws the hand itself and pulses gently — the cue is "make this shape and keep
+ * it there", not "move this way".
+ *
+ * Everything is drawn as if pointing up, then rotated, so one piece of geometry covers all four
+ * pointing directions.
  */
 @Composable
 fun HandPoseDiagram(
-    direction: GestureDirection,
-    requiredShape: HandShape,
+    pose: HandPoseState,
     modifier: Modifier = Modifier,
     color: Color = Color(0xFF5B8DEF)
 ) {
-    val transition = rememberInfiniteTransition(label = "gesture-motion")
-    val progress by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
+    val transition = rememberInfiniteTransition(label = "pose-hold")
+    val pulse by transition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900),
+            animation = tween(durationMillis = 1100),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "swipe-progress"
+        label = "pulse"
     )
 
     Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val travel = minOf(w, h) * 0.18f
-
-        val (dx, dy) = when (direction) {
-            GestureDirection.UP -> 0f to -travel
-            GestureDirection.DOWN -> 0f to travel
-            GestureDirection.LEFT -> -travel to 0f
-            GestureDirection.RIGHT -> travel to 0f
+        val rotationDegrees = when (pose) {
+            is HandPoseState.Pointing -> when (pose.direction) {
+                PointDirection.UP -> 0f
+                PointDirection.RIGHT -> 90f
+                PointDirection.DOWN -> 180f
+                PointDirection.LEFT -> -90f
+            }
+            else -> 0f
         }
 
-        val shiftX = dx * progress
-        val shiftY = dy * progress
-
-        val palmWidth = w * 0.30f
-        val palmHeight = h * 0.26f
-        val centerX = w / 2f + shiftX
-        val palmTop = h * 0.55f + shiftY
-        val strokeWidth = w * 0.035f
-        val stroke = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-
-        // Palm
-        drawRoundedPalm(
-            centerX = centerX,
-            top = palmTop,
-            width = palmWidth,
-            height = palmHeight,
-            color = color,
-            stroke = stroke
-        )
-
-        val fingerSpacing = palmWidth / 3.4f
-        val fingerBaseY = palmTop
-        val extendedTipY = palmTop - h * 0.30f
-        val curledTipY = palmTop - h * 0.07f
-
-        // index, middle, ring, pinky — which of them are drawn extended for this pose
-        val extendedFlags = when (requiredShape) {
-            HandShape.TWO_FINGERS -> listOf(true, true, false, false)
-            HandShape.OPEN_PALM -> listOf(true, true, true, true)
-            else -> listOf(false, false, false, false) // fist
+        val extendedFingers = when (pose) {
+            is HandPoseState.Pointing -> 1
+            HandPoseState.TwoFingers -> 2
+            else -> 0
         }
-        val fingers = listOf(-1.5f, -0.5f, 0.5f, 1.5f).zip(extendedFlags)
 
-        fingers.forEach { (slot, extended) ->
-            val x = centerX + slot * fingerSpacing
-            drawLine(
-                color = if (extended) color else color.copy(alpha = 0.35f),
-                start = Offset(x, fingerBaseY),
-                end = Offset(x, if (extended) extendedTipY else curledTipY),
-                strokeWidth = strokeWidth,
-                cap = StrokeCap.Round
+        rotate(degrees = rotationDegrees, pivot = center) {
+            drawHand(
+                extendedFingers = extendedFingers,
+                scale = pulse,
+                color = color
             )
         }
-
-        // Thumb, angled off the side of the palm
-        drawLine(
-            color = color,
-            start = Offset(centerX - palmWidth / 2f, palmTop + palmHeight * 0.30f),
-            end = Offset(centerX - palmWidth * 0.85f, palmTop - h * 0.02f),
-            strokeWidth = strokeWidth,
-            cap = StrokeCap.Round
-        )
-
-        drawDirectionArrow(
-            direction = direction,
-            color = color.copy(alpha = 0.55f),
-            strokeWidth = strokeWidth * 0.8f
-        )
     }
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRoundedPalm(
+/**
+ * Draws a stylised hand pointing up: a rounded palm, [extendedFingers] fingers standing up, and the
+ * rest as knuckle stubs.
+ */
+private fun DrawScope.drawHand(extendedFingers: Int, scale: Float, color: Color) {
+    val w = size.width
+    val h = size.height
+    val centerX = w / 2f
+    val palmWidth = w * 0.34f * scale
+    val palmHeight = h * 0.26f * scale
+    val palmTop = h * 0.56f
+    val palmCenterY = palmTop + palmHeight / 2f
+
+    val stroke = Stroke(width = w * 0.035f, cap = StrokeCap.Round)
+
+    drawRoundedPalm(centerX, palmCenterY, palmWidth, palmHeight, color, stroke)
+
+    // Four finger slots across the top of the palm; the leftmost ones are the extended ones.
+    val slotSpacing = palmWidth / 4f
+    val firstSlotX = centerX - palmWidth / 2f + slotSpacing / 2f
+    val fingerLength = h * 0.28f * scale
+    val stubLength = h * 0.05f * scale
+
+    repeat(4) { i ->
+        val x = firstSlotX + i * slotSpacing
+        val extended = i < extendedFingers
+        val length = if (extended) fingerLength else stubLength
+        drawLine(
+            color = color,
+            start = Offset(x, palmTop),
+            end = Offset(x, palmTop - length),
+            strokeWidth = stroke.width,
+            cap = StrokeCap.Round
+        )
+    }
+
+    // Thumb, tucked against the side of the palm.
+    drawLine(
+        color = color,
+        start = Offset(centerX + palmWidth / 2f, palmCenterY + palmHeight * 0.15f),
+        end = Offset(centerX + palmWidth / 2f + w * 0.10f * scale, palmCenterY - palmHeight * 0.25f),
+        strokeWidth = stroke.width,
+        cap = StrokeCap.Round
+    )
+}
+
+private fun DrawScope.drawRoundedPalm(
     centerX: Float,
-    top: Float,
+    centerY: Float,
     width: Float,
     height: Float,
     color: Color,
     stroke: Stroke
 ) {
-    val path = Path().apply {
-        val left = centerX - width / 2f
-        val right = centerX + width / 2f
-        val bottom = top + height
-        moveTo(left, top)
-        lineTo(right, top)
-        lineTo(right, bottom - height * 0.25f)
-        quadraticBezierTo(right, bottom, centerX, bottom)
-        quadraticBezierTo(left, bottom, left, bottom - height * 0.25f)
-        close()
-    }
-    drawPath(path, color = color, style = stroke)
-}
-
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDirectionArrow(
-    direction: GestureDirection,
-    color: Color,
-    strokeWidth: Float
-) {
-    val w = size.width
-    val h = size.height
-    val margin = minOf(w, h) * 0.08f
-    val length = minOf(w, h) * 0.20f
-    val headSize = length * 0.35f
-
-    val (start, end) = when (direction) {
-        GestureDirection.UP -> Offset(w - margin, h * 0.55f) to Offset(w - margin, h * 0.55f - length)
-        GestureDirection.DOWN -> Offset(w - margin, h * 0.35f) to Offset(w - margin, h * 0.35f + length)
-        GestureDirection.LEFT -> Offset(w * 0.62f, margin) to Offset(w * 0.62f - length, margin)
-        GestureDirection.RIGHT -> Offset(w * 0.38f, margin) to Offset(w * 0.38f + length, margin)
-    }
-
-    drawLine(color, start, end, strokeWidth = strokeWidth, cap = StrokeCap.Round)
-
-    val (h1, h2) = when (direction) {
-        GestureDirection.UP -> Offset(end.x - headSize, end.y + headSize) to Offset(end.x + headSize, end.y + headSize)
-        GestureDirection.DOWN -> Offset(end.x - headSize, end.y - headSize) to Offset(end.x + headSize, end.y - headSize)
-        GestureDirection.LEFT -> Offset(end.x + headSize, end.y - headSize) to Offset(end.x + headSize, end.y + headSize)
-        GestureDirection.RIGHT -> Offset(end.x - headSize, end.y - headSize) to Offset(end.x - headSize, end.y + headSize)
-    }
-    drawLine(color, end, h1, strokeWidth = strokeWidth, cap = StrokeCap.Round)
-    drawLine(color, end, h2, strokeWidth = strokeWidth, cap = StrokeCap.Round)
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(centerX - width / 2f, centerY - height / 2f),
+        size = androidx.compose.ui.geometry.Size(width, height),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(width * 0.25f),
+        style = stroke
+    )
 }

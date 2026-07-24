@@ -1,33 +1,33 @@
 package com.gesturephonecontrol.app.gesture
 
 /**
- * What a recognized gesture should make the phone do. Kept as data rather than as code inside the
+ * What a recognized pose should make the phone do. Kept as data rather than as code inside the
  * accessibility service so the mapping is one readable table, and so the tutorial can describe the
  * exact same set of commands without duplicating it.
  */
-enum class GestureCommand(val label: String) {
-    SCROLL_UP("Scroll hacia arriba"),
-    SCROLL_DOWN("Scroll hacia abajo"),
-    NOTIFICATIONS("Bajar notificaciones"),
-    BACK("Atrás"),
-    RECENTS("Apps recientes"),
-    HOME("Ir al inicio")
+enum class GestureCommand(val label: String, val repeatable: Boolean) {
+    SCROLL_UP("Scroll hacia arriba", repeatable = true),
+    SCROLL_DOWN("Scroll hacia abajo", repeatable = true),
+    BACK("Atrás", repeatable = false),
+    RECENTS("Apps recientes", repeatable = false),
+    NOTIFICATIONS("Bajar notificaciones", repeatable = false),
+    HOME("Ir al inicio", repeatable = false)
 }
 
 /**
- * The gesture vocabulary, organised so the hand pose picks a "mode" and the swipe direction picks
- * the action within it — two fingers scroll, an open palm navigates, a fist goes home. Grouping it
- * that way keeps the set memorable as it grows, instead of four unrelated shortcuts.
+ * The gesture vocabulary. Pointing with the index finger covers the four directional commands —
+ * the finger points the way you want to go — while the two shape poses cover the remaining two.
+ *
+ * Only scrolling repeats while held; the rest fire once per pose so that holding a fist doesn't
+ * slam the home button over and over.
  */
-val GESTURE_COMMANDS: Map<GestureEvent, GestureCommand> = mapOf(
-    GestureEvent(HandShape.TWO_FINGERS, GestureDirection.UP) to GestureCommand.SCROLL_UP,
-    GestureEvent(HandShape.TWO_FINGERS, GestureDirection.DOWN) to GestureCommand.SCROLL_DOWN,
-
-    GestureEvent(HandShape.OPEN_PALM, GestureDirection.DOWN) to GestureCommand.NOTIFICATIONS,
-    GestureEvent(HandShape.OPEN_PALM, GestureDirection.LEFT) to GestureCommand.BACK,
-    GestureEvent(HandShape.OPEN_PALM, GestureDirection.RIGHT) to GestureCommand.RECENTS,
-
-    GestureEvent(HandShape.FIST, GestureDirection.UP) to GestureCommand.HOME
+val GESTURE_COMMANDS: Map<HandPoseState, GestureCommand> = mapOf(
+    HandPoseState.Pointing(PointDirection.UP) to GestureCommand.SCROLL_UP,
+    HandPoseState.Pointing(PointDirection.DOWN) to GestureCommand.SCROLL_DOWN,
+    HandPoseState.Pointing(PointDirection.LEFT) to GestureCommand.BACK,
+    HandPoseState.Pointing(PointDirection.RIGHT) to GestureCommand.RECENTS,
+    HandPoseState.TwoFingers to GestureCommand.NOTIFICATIONS,
+    HandPoseState.Fist to GestureCommand.HOME
 )
 
-fun commandFor(event: GestureEvent): GestureCommand? = GESTURE_COMMANDS[event]
+fun commandFor(pose: HandPoseState): GestureCommand? = GESTURE_COMMANDS[pose]

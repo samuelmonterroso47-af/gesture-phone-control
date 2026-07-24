@@ -182,9 +182,9 @@ private fun GestureControlScreen(
         }
 
         Text(
-            "Dos dedos (índice + medio): arriba/abajo = scroll. " +
-                "Mano abierta: abajo = notificaciones, izquierda = atrás, derecha = recientes. " +
-                "Puño arriba = inicio."
+            "Apunta con el índice y sostén: arriba = scroll ↑, abajo = scroll ↓, " +
+                "izquierda = atrás, derecha = recientes. " +
+                "Índice + medio en \"V\" = notificaciones. Puño = inicio."
         )
     }
 }

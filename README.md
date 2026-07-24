@@ -19,61 +19,59 @@ Cámara frontal
      │
      ▼
 HandGesturePipeline                (CameraX + MediaPipe HandLandmarker)
- - Captura frames de la cámara frontal
  - Detecta los 21 landmarks de la mano por frame
- - Calcula el centroide de la palma y su movimiento
+ - HandPose      -> qué pose sostiene la mano (a dónde apunta el índice, "V", puño)
+ - PoseHoldDetector -> ¿la sostuvo el tiempo suficiente para contar?
      │  usado por
      ├── GestureForegroundService (sin preview) → GestureEventBus (in-process, SharedFlow)
      │                                                    │
      │                                                    ▼
      │                                      GestureAccessibilityService (AccessibilityService)
-     │                                       - performGlobalAction(...) → notificaciones, atrás, recientes
-     │                                       - dispatchGesture(...)     → swipe sintético real (scroll)
+     │                                       - performGlobalAction(...) → notificaciones, atrás, recientes, inicio
+     │                                       - dispatchGesture(...)     → scroll sintético real
      │                                       - vibra al ejecutar cada acción
      │
      └── GestureTrainingScreen (tutorial, con preview en vivo) → solo muestra estado, no dispara acciones
 ```
 
-- **`GestureClassifier`** (`gesture/GestureClassifier.kt`) es lógica pura sin
-  dependencias de Android: recibe la posición del punto rastreado por frame y
-  decide si hubo un swipe rápido (arriba/abajo/izquierda/derecha), con un
-  umbral de velocidad/desplazamiento y un cooldown para no disparar dos veces
-  el mismo gesto.
-- **`HandPose`** (`gesture/HandPose.kt`) también es lógica pura: clasifica la
-  forma de la mano a partir de los 21 landmarks (¿índice y medio extendidos
-  con anular y meñique doblados?) y calcula el punto a rastrear.
-- **`HandGesturePipeline`** (`gesture/HandGesturePipeline.kt`) encapsula la
-  cámara + MediaPipe; la reutilizan tanto el servicio en segundo plano como
-  la pantalla de entrenamiento.
+- **`HandPose`** (`gesture/HandPose.kt`) es lógica pura sin dependencias de
+  Android: convierte los 21 landmarks en una pose. Para apuntar, lo que mide
+  es la **orientación del dedo** (el vector del nudillo a la punta), no dónde
+  está la mano en el encuadre: al rotar el índice de apuntar arriba a apuntar
+  al lado, la mano casi no se desplaza, así que rastrear su posición no
+  detectaría nada.
+- **`PoseHoldDetector`** (`gesture/PoseHoldDetector.kt`), también lógica pura,
+  exige sostener la pose ~450 ms antes de contarla, para que una pose por la
+  que solo estás pasando no dispare. Mientras la sostienes, el scroll se
+  repite cada 700 ms; los demás comandos disparan una sola vez por pose.
 
-### Mapeo de gestos por defecto
+### Vocabulario de gestos
 
-La seña de la mano elige el "modo" y la dirección elige la acción dentro de
-ese modo. Agrupado así el vocabulario se mantiene memorizable conforme crece,
-en vez de ser una lista de atajos sueltos:
+**Las poses se sostienen, no se agitan.** No hay manotazos: pones la mano en
+la pose y la mantienes quieta frente a la cámara. Eso cansa mucho menos y
+funciona con la mano apoyada, que es el caso real (estás comiendo y quieres
+cambiar de video).
 
-| Seña | Dirección | Acción |
+| Pose | Acción | ¿Se repite al sostener? |
 |---|---|---|
-| **Dos dedos** (índice + medio, anular y meñique doblados) | arriba | Scroll hacia arriba |
-| **Dos dedos** | abajo | Scroll hacia abajo |
-| **Mano abierta** | abajo | Bajar notificaciones |
-| **Mano abierta** | izquierda | Atrás |
-| **Mano abierta** | derecha | Apps recientes |
-| **Puño cerrado** | arriba | Ir al inicio |
+| **Índice** apuntando **arriba** | Scroll hacia arriba | Sí |
+| **Índice** apuntando **abajo** | Scroll hacia abajo | Sí |
+| **Índice** apuntando a la **izquierda** | Atrás | No |
+| **Índice** apuntando a la **derecha** | Apps recientes | No |
+| **Índice + medio** en "V" | Bajar notificaciones | No |
+| **Puño** cerrado | Ir al inicio | No |
 
-Un gesto solo cuenta si mantuviste **una misma seña reconocida** durante todo
-el movimiento. Eso descarta tanto el movimiento incidental (una mano sin seña
-pasando frente a la cámara) como el momento ambiguo en que estás cambiando de
-una seña a otra, que si no dispararía el comando equivocado.
+Apuntar cubre las cuatro direcciones —el dedo señala a dónde quieres ir— y
+las dos poses de forma cubren el resto. Solo el scroll se repite mientras
+sostienes: así sostener el puño no aporrea el botón de inicio una y otra vez.
 
 ### Tutorial de entrenamiento
 
 La primera vez que abres la app (con permiso de cámara concedido) entra
-automáticamente al tutorial guiado: enseña un gesto a la vez, con un diagrama
-animado de la seña y el movimiento correcto, la cámara en vivo al lado, y un
-semáforo de estado ("no veo tu mano" / "veo tu mano pero no la seña" /
-"¡listo, haz el movimiento!"). Cada gesto pide 3 repeticiones correctas antes
-de avanzar, y son 6 pasos en total. Durante el tutorial **no se ejecuta ninguna acción real** del
+automáticamente al tutorial guiado: enseña una pose a la vez, con un diagrama
+de la pose exacta, la cámara en vivo al lado, y un semáforo de estado ("no veo
+tu mano" / "veo tu mano pero no la pose" / "¡pose correcta, sostenla!"). Son 6
+pasos en total. Durante el tutorial **no se ejecuta ninguna acción real** del
 sistema, así que puedes practicar sin miedo. Se puede repetir cuando quieras
 con el botón "Practicar gestos (tutorial)" en la pantalla principal.
 
@@ -83,9 +81,9 @@ Todo el vocabulario vive en una sola tabla, `GESTURE_COMMANDS` en
 `gesture/GestureCommand.kt`: agregar o remapear un comando es editar esa
 tabla (y agregar su lección en `training/GestureLesson.kt`, que lee de la
 misma tabla para no desincronizarse). `GestureAccessibilityService` solo sabe
-*ejecutar* cada comando, no cuál gesto lo produce. La sensibilidad (distancia
-mínima, velocidad mínima, cooldown) se ajusta en el constructor de
-`GestureClassifier`.
+*ejecutar* cada comando, no cuál pose lo produce. Qué tan rápido responde
+—cuánto hay que sostener y cada cuánto se repite— se ajusta en el constructor
+de `PoseHoldDetector`.
 
 ## Limitaciones importantes (léelo antes de instalar)
 
@@ -144,7 +142,7 @@ sin desinstalar primero.
    depuración habilitada, o usa un emulador con soporte de cámara virtual.
 3. Ejecuta la app (▶). Se instalará y abrirá la pantalla principal.
 4. La primera vez entra solo al **tutorial guiado** (solo necesita permiso de
-   cámara). Practica ahí los 4 gestos hasta que te salgan naturales; no
+   cámara). Practica ahí las 6 poses hasta que te salgan naturales; no
    dispara ninguna acción real del sistema.
 5. Cuando estés conforme, sigue los otros pasos: activar el servicio de
    accesibilidad en Ajustes, y presionar "Iniciar detección".
@@ -163,9 +161,9 @@ Para correr los tests unitarios de la lógica de clasificación de gestos:
 app/src/main/java/com/gesturephonecontrol/app/
 ├── MainActivity.kt                       # UI (Compose): permisos, estado, iniciar/detener
 ├── gesture/
-│   ├── GestureClassifier.kt              # lógica pura: movimiento + seña -> GestureEvent
-│   ├── HandPose.kt                       # lógica pura: landmarks -> forma de la mano
-│   ├── GestureCommand.kt                 # tabla única: qué gesto hace qué
+│   ├── HandPose.kt                       # lógica pura: landmarks -> pose (a dónde apunta)
+│   ├── PoseHoldDetector.kt               # lógica pura: ¿sostuvo la pose lo suficiente?
+│   ├── GestureCommand.kt                 # tabla única: qué pose hace qué
 │   ├── GestureEventBus.kt                # bus in-process entre los dos servicios
 │   ├── HandGesturePipeline.kt            # CameraX + MediaPipe HandLandmarker (compartido)
 │   ├── ScreenAwakeController.kt          # evita que la pantalla se apague durante el uso

@@ -12,7 +12,7 @@ import com.gesturephonecontrol.app.R
 
 /**
  * Foreground service that keeps [HandGesturePipeline] running with no preview — it only extracts
- * the palm centroid per frame and forwards swipe events to [GestureEventBus].
+ * the hand pose per frame and forwards recognized commands to [GestureEventBus].
  *
  * Runs as a `camera`-typed foreground service because Android forbids camera access from a
  * background process on API 28+ otherwise (see README for why this can't be a plain Service).
@@ -34,7 +34,7 @@ class GestureForegroundService : LifecycleService() {
         screenAwake.acquire()
         pipeline = HandGesturePipeline(
             context = applicationContext,
-            onGesture = { event -> commandFor(event)?.let(GestureEventBus::emit) }
+            onCommand = { command -> GestureEventBus.emit(command) }
         )
         pipeline.start(lifecycleOwner = this)
     }

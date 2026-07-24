@@ -1,66 +1,56 @@
 package com.gesturephonecontrol.app.training
 
 import com.gesturephonecontrol.app.gesture.GESTURE_COMMANDS
-import com.gesturephonecontrol.app.gesture.GestureDirection
-import com.gesturephonecontrol.app.gesture.GestureEvent
-import com.gesturephonecontrol.app.gesture.HandShape
+import com.gesturephonecontrol.app.gesture.HandPoseState
+import com.gesturephonecontrol.app.gesture.PointDirection
 
 /**
- * One step of the guided tutorial: the gesture being taught and how to perform it. The gesture and
- * its resulting action come from [GESTURE_COMMANDS], so the tutorial can never drift out of sync
- * with what the app actually does.
+ * One step of the guided tutorial: the pose being taught and how to hold it. The pose and its
+ * resulting action come from [GESTURE_COMMANDS], so the tutorial can never drift out of sync with
+ * what the app actually does.
  */
 data class GestureLesson(
-    val event: GestureEvent,
+    val pose: HandPoseState,
     val title: String,
-    val poseInstruction: String,
-    val motionInstruction: String,
-    val repsToPass: Int = 3
+    val instruction: String,
+    val repsToPass: Int = 2
 ) {
     val actionLabel: String
-        get() = GESTURE_COMMANDS.getValue(event).label
+        get() = GESTURE_COMMANDS.getValue(pose).label
 }
 
-private const val TWO_FINGERS_POSE =
-    "Levanta solo el índice y el medio, juntos. Dobla el anular y el meñique."
-private const val OPEN_PALM_POSE = "Mano completamente abierta, con la palma hacia la cámara."
-private const val FIST_POSE = "Cierra la mano en un puño."
+private const val INDEX_ONLY =
+    "Extiende solo el dedo índice (los demás doblados) y apunta"
 
 val GESTURE_LESSONS = listOf(
     GestureLesson(
-        event = GestureEvent(HandShape.TWO_FINGERS, GestureDirection.UP),
+        pose = HandPoseState.Pointing(PointDirection.UP),
         title = "Scroll hacia arriba",
-        poseInstruction = TWO_FINGERS_POSE,
-        motionInstruction = "Con esos dos dedos, sube la mano rápido, en línea recta."
+        instruction = "$INDEX_ONLY hacia arriba. Sostén la pose — mientras la mantengas, sigue haciendo scroll."
     ),
     GestureLesson(
-        event = GestureEvent(HandShape.TWO_FINGERS, GestureDirection.DOWN),
+        pose = HandPoseState.Pointing(PointDirection.DOWN),
         title = "Scroll hacia abajo",
-        poseInstruction = TWO_FINGERS_POSE,
-        motionInstruction = "Con los mismos dos dedos, baja la mano rápido, en línea recta."
+        instruction = "$INDEX_ONLY hacia abajo. Sostén la pose para seguir bajando."
     ),
     GestureLesson(
-        event = GestureEvent(HandShape.OPEN_PALM, GestureDirection.DOWN),
-        title = "Bajar notificaciones",
-        poseInstruction = OPEN_PALM_POSE,
-        motionInstruction = "Baja la mano rápido, como si limpiaras un vidrio."
-    ),
-    GestureLesson(
-        event = GestureEvent(HandShape.OPEN_PALM, GestureDirection.LEFT),
+        pose = HandPoseState.Pointing(PointDirection.LEFT),
         title = "Atrás",
-        poseInstruction = OPEN_PALM_POSE,
-        motionInstruction = "Mueve la mano rápido hacia tu izquierda, en línea recta."
+        instruction = "$INDEX_ONLY hacia tu izquierda, con el dedo en horizontal."
     ),
     GestureLesson(
-        event = GestureEvent(HandShape.OPEN_PALM, GestureDirection.RIGHT),
+        pose = HandPoseState.Pointing(PointDirection.RIGHT),
         title = "Apps recientes",
-        poseInstruction = OPEN_PALM_POSE,
-        motionInstruction = "Mueve la mano rápido hacia tu derecha, en línea recta."
+        instruction = "$INDEX_ONLY hacia tu derecha, con el dedo en horizontal."
     ),
     GestureLesson(
-        event = GestureEvent(HandShape.FIST, GestureDirection.UP),
+        pose = HandPoseState.TwoFingers,
+        title = "Bajar notificaciones",
+        instruction = "Levanta el índice y el medio en \"V\". Sostén la pose."
+    ),
+    GestureLesson(
+        pose = HandPoseState.Fist,
         title = "Ir al inicio",
-        poseInstruction = FIST_POSE,
-        motionInstruction = "Con el puño cerrado, sube la mano rápido, en línea recta."
+        instruction = "Cierra la mano en un puño y sostenlo frente a la cámara."
     )
 )
