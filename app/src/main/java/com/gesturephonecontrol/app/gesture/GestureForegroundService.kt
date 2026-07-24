@@ -20,6 +20,7 @@ import com.gesturephonecontrol.app.R
 class GestureForegroundService : LifecycleService() {
 
     private lateinit var pipeline: HandGesturePipeline
+    private lateinit var screenAwake: ScreenAwakeController
 
     override fun onCreate() {
         super.onCreate()
@@ -29,6 +30,8 @@ class GestureForegroundService : LifecycleService() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+        screenAwake = ScreenAwakeController(this)
+        screenAwake.acquire()
         pipeline = HandGesturePipeline(
             context = applicationContext,
             onGesture = { direction -> GestureEventBus.emit(direction) }
@@ -38,6 +41,7 @@ class GestureForegroundService : LifecycleService() {
 
     override fun onDestroy() {
         pipeline.stop()
+        screenAwake.release()
         super.onDestroy()
     }
 

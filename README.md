@@ -98,6 +98,14 @@ el constructor de `GestureClassifier`.
   Apps > Gesture Phone Control > menú de 3 puntos (arriba a la derecha) >
   **"Permitir configuración restringida"**, y luego vuelve a Accesibilidad
   a activarlo. Es un paso único por instalación.
+- **La pantalla se mantiene encendida mientras la detección esté activa**,
+  porque un teléfono que se apaga a media sesión hace inútil el control sin
+  manos. Eso requiere el permiso "Mostrar sobre otras apps": la app coloca
+  una ventana invisible de 1x1 px cuyo único fin es cargar la bandera
+  `FLAG_KEEP_SCREEN_ON` (un servicio no tiene ventana propia donde ponerla).
+  Si no concedes ese permiso todo lo demás sigue funcionando; la pantalla
+  simplemente se apaga con su tiempo normal. Recuerda **detener la detección**
+  cuando no la uses, o la pantalla encendida te consumirá batería.
 - **La cámara corre en segundo plano mientras el servicio esté activo**,
   pero nunca se sube ni se guarda video: los frames se procesan localmente
   en el teléfono para calcular la posición de la mano y se descartan.
@@ -151,6 +159,7 @@ app/src/main/java/com/gesturephonecontrol/app/
 │   ├── HandPose.kt                       # lógica pura: landmarks -> forma de la mano
 │   ├── GestureEventBus.kt                # bus in-process entre los dos servicios
 │   ├── HandGesturePipeline.kt            # CameraX + MediaPipe HandLandmarker (compartido)
+│   ├── ScreenAwakeController.kt          # evita que la pantalla se apague durante el uso
 │   └── GestureForegroundService.kt       # foreground service sin preview
 ├── training/
 │   ├── GestureLesson.kt                  # contenido del tutorial (pasos e instrucciones)

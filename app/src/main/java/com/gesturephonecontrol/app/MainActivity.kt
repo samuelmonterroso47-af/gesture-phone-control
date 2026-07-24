@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -34,6 +35,7 @@ class MainActivity : ComponentActivity() {
 
     private var hasCameraPermission by mutableStateOf(false)
     private var isAccessibilityEnabled by mutableStateOf(false)
+    private var canKeepScreenOn by mutableStateOf(false)
     private var showTraining by mutableStateOf(false)
 
     private val requestCameraPermission = registerForActivityResult(
@@ -64,9 +66,18 @@ class MainActivity : ComponentActivity() {
                         GestureControlScreen(
                             hasCameraPermission = hasCameraPermission,
                             isAccessibilityEnabled = isAccessibilityEnabled,
+                            canKeepScreenOn = canKeepScreenOn,
                             onRequestCameraPermission = { requestCameraPermission.launch(Manifest.permission.CAMERA) },
                             onOpenAccessibilitySettings = {
                                 startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                            },
+                            onRequestScreenOnPermission = {
+                                startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:$packageName")
+                                    )
+                                )
                             },
                             onStartDetection = {
                                 ContextCompat.startForegroundService(
@@ -91,6 +102,7 @@ class MainActivity : ComponentActivity() {
         hasCameraPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
             PackageManager.PERMISSION_GRANTED
         isAccessibilityEnabled = isAccessibilityServiceEnabled()
+        canKeepScreenOn = Settings.canDrawOverlays(this)
     }
 
     private fun isAccessibilityServiceEnabled(): Boolean {
@@ -119,8 +131,10 @@ class MainActivity : ComponentActivity() {
 private fun GestureControlScreen(
     hasCameraPermission: Boolean,
     isAccessibilityEnabled: Boolean,
+    canKeepScreenOn: Boolean,
     onRequestCameraPermission: () -> Unit,
     onOpenAccessibilitySettings: () -> Unit,
+    onRequestScreenOnPermission: () -> Unit,
     onStartDetection: () -> Unit,
     onStopDetection: () -> Unit,
     onOpenTraining: () -> Unit
@@ -147,7 +161,17 @@ private fun GestureControlScreen(
             Button(onClick = onOpenAccessibilitySettings) { Text("Activar en Ajustes de Accesibilidad") }
         }
 
-        Text("3. Detección de gestos con la cámara frontal")
+        Text(
+            "3. Mantener pantalla encendida: " +
+                if (canKeepScreenOn) "permitido" else "pendiente"
+        )
+        if (!canKeepScreenOn) {
+            Button(onClick = onRequestScreenOnPermission) {
+                Text("Permitir (evita que se apague la pantalla)")
+            }
+        }
+
+        Text("4. Detección de gestos con la cámara frontal")
         Button(onClick = onStartDetection, enabled = hasCameraPermission && isAccessibilityEnabled) {
             Text("Iniciar detección")
         }
@@ -171,8 +195,10 @@ private fun GestureControlScreenPreview() {
         GestureControlScreen(
             hasCameraPermission = false,
             isAccessibilityEnabled = false,
+            canKeepScreenOn = false,
             onRequestCameraPermission = {},
             onOpenAccessibilitySettings = {},
+            onRequestScreenOnPermission = {},
             onStartDetection = {},
             onStopDetection = {},
             onOpenTraining = {}
