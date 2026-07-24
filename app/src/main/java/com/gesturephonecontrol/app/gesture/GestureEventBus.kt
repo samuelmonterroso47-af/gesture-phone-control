@@ -10,10 +10,10 @@ import kotlinx.coroutines.flow.asSharedFlow
  * them). Both run in the same app process, so a shared singleton is enough — no IPC needed.
  */
 object GestureEventBus {
-    private val _events = MutableSharedFlow<GestureDirection>(extraBufferCapacity = 4)
-    val events: SharedFlow<GestureDirection> = _events.asSharedFlow()
+    private val _events = MutableSharedFlow<GestureCommand>(extraBufferCapacity = 4)
+    val events: SharedFlow<GestureCommand> = _events.asSharedFlow()
 
-    fun emit(direction: GestureDirection) {
-        _events.tryEmit(direction)
+    fun emit(command: GestureCommand) {
+        _events.tryEmit(command)
     }
 }

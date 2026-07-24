@@ -25,7 +25,7 @@ import com.gesturephonecontrol.app.gesture.HandShape
 @Composable
 fun HandPoseDiagram(
     direction: GestureDirection,
-    requiredShape: HandShape?,
+    requiredShape: HandShape,
     modifier: Modifier = Modifier,
     color: Color = Color(0xFF5B8DEF)
 ) {
@@ -77,14 +77,13 @@ fun HandPoseDiagram(
         val extendedTipY = palmTop - h * 0.30f
         val curledTipY = palmTop - h * 0.07f
 
-        val twoFingers = requiredShape == HandShape.TWO_FINGERS
-        // index, middle, ring, pinky — outer two curl only for the two-finger pose
-        val fingers = listOf(
-            -1.5f to true,
-            -0.5f to true,
-            0.5f to !twoFingers,
-            1.5f to !twoFingers
-        )
+        // index, middle, ring, pinky — which of them are drawn extended for this pose
+        val extendedFlags = when (requiredShape) {
+            HandShape.TWO_FINGERS -> listOf(true, true, false, false)
+            HandShape.OPEN_PALM -> listOf(true, true, true, true)
+            else -> listOf(false, false, false, false) // fist
+        }
+        val fingers = listOf(-1.5f, -0.5f, 0.5f, 1.5f).zip(extendedFlags)
 
         fingers.forEach { (slot, extended) ->
             val x = centerX + slot * fingerSpacing

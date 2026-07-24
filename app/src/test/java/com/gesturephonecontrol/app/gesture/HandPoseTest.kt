@@ -38,25 +38,25 @@ class HandPoseTest {
     }
 
     @Test
-    fun `fully open hand is not TWO_FINGERS`() {
+    fun `all four fingers extended is OPEN_PALM`() {
         val shape = HandPose.classify(hand(indexUp = true, middleUp = true, ringUp = true, pinkyUp = true))
-        assertEquals(HandShape.OTHER, shape)
+        assertEquals(HandShape.OPEN_PALM, shape)
     }
 
     @Test
-    fun `single index finger is not TWO_FINGERS`() {
+    fun `all four fingers curled is FIST`() {
+        val shape = HandPose.classify(hand(indexUp = false, middleUp = false, ringUp = false, pinkyUp = false))
+        assertEquals(HandShape.FIST, shape)
+    }
+
+    @Test
+    fun `a single index finger is not a command pose`() {
         val shape = HandPose.classify(hand(indexUp = true, middleUp = false, ringUp = false, pinkyUp = false))
         assertEquals(HandShape.OTHER, shape)
     }
 
     @Test
-    fun `closed fist is not TWO_FINGERS`() {
-        val shape = HandPose.classify(hand(indexUp = false, middleUp = false, ringUp = false, pinkyUp = false))
-        assertEquals(HandShape.OTHER, shape)
-    }
-
-    @Test
-    fun `incomplete landmark list is not TWO_FINGERS`() {
+    fun `incomplete landmark list is not a command pose`() {
         assertEquals(HandShape.OTHER, HandPose.classify(listOf(Landmark(0.5f, 0.5f))))
     }
 

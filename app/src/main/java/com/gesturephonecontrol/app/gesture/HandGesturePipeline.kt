@@ -35,7 +35,7 @@ import java.io.ByteArrayOutputStream
 class HandGesturePipeline(
     private val context: Context,
     private val onHandState: (HandShape?) -> Unit = {},
-    private val onGesture: (GestureDirection) -> Unit
+    private val onGesture: (GestureEvent) -> Unit
 ) {
     private var cameraProvider: ProcessCameraProvider? = null
     private var handLandmarker: HandLandmarker? = null
@@ -123,11 +123,11 @@ class HandGesturePipeline(
         // Raw front-camera frames aren't mirrored, so flip X: a hand moving to the user's
         // physical right should read as "right", matching how a selfie view looks.
         val mirroredX = 1f - anchor.x
-        val direction = classifier.onHandPoint(
+        val event = classifier.onHandPoint(
             HandPoint(mirroredX, anchor.y, System.currentTimeMillis(), shape)
         )
-        if (direction != null) {
-            onGesture(direction)
+        if (event != null) {
+            onGesture(event)
         }
     }
 

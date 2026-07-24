@@ -48,18 +48,23 @@ HandGesturePipeline                (CameraX + MediaPipe HandLandmarker)
 
 ### Mapeo de gestos por defecto
 
-| Gesto (mano) | Acción                                   |
-|---|---|
-| **Índice + medio juntos**, deslizar **arriba** | Swipe sintético hacia arriba (scroll dentro de la app activa) |
-| Mano abierta, deslizar **abajo** | Baja el panel de notificaciones |
-| Mano abierta, deslizar a la **izquierda** | Atrás |
-| Mano abierta, deslizar a la **derecha** | Apps recientes / cambiar de vista |
+La seña de la mano elige el "modo" y la dirección elige la acción dentro de
+ese modo. Agrupado así el vocabulario se mantiene memorizable conforme crece,
+en vez de ser una lista de atajos sueltos:
 
-El gesto de "arriba" exige deliberadamente la seña de dos dedos (índice +
-medio extendidos, anular y meñique doblados): levantar la mano frente a la
-cámara es algo que uno hace todo el tiempo sin querer, así que sin una seña
-explícita ese gesto se dispararía solo. Los otros tres, al ser movimientos
-menos frecuentes de forma accidental, funcionan con la mano abierta.
+| Seña | Dirección | Acción |
+|---|---|---|
+| **Dos dedos** (índice + medio, anular y meñique doblados) | arriba | Scroll hacia arriba |
+| **Dos dedos** | abajo | Scroll hacia abajo |
+| **Mano abierta** | abajo | Bajar notificaciones |
+| **Mano abierta** | izquierda | Atrás |
+| **Mano abierta** | derecha | Apps recientes |
+| **Puño cerrado** | arriba | Ir al inicio |
+
+Un gesto solo cuenta si mantuviste **una misma seña reconocida** durante todo
+el movimiento. Eso descarta tanto el movimiento incidental (una mano sin seña
+pasando frente a la cámara) como el momento ambiguo en que estás cambiando de
+una seña a otra, que si no dispararía el comando equivocado.
 
 ### Tutorial de entrenamiento
 
@@ -68,16 +73,19 @@ automáticamente al tutorial guiado: enseña un gesto a la vez, con un diagrama
 animado de la seña y el movimiento correcto, la cámara en vivo al lado, y un
 semáforo de estado ("no veo tu mano" / "veo tu mano pero no la seña" /
 "¡listo, haz el movimiento!"). Cada gesto pide 3 repeticiones correctas antes
-de avanzar. Durante el tutorial **no se ejecuta ninguna acción real** del
+de avanzar, y son 6 pasos en total. Durante el tutorial **no se ejecuta ninguna acción real** del
 sistema, así que puedes practicar sin miedo. Se puede repetir cuando quieras
 con el botón "Practicar gestos (tutorial)" en la pantalla principal.
 
 ### Cómo cambiar el mapeo
 
-Este mapeo es una decisión de diseño, no algo fijo — se cambia en
-`GestureAccessibilityService.handle()` (un `when` sobre `GestureDirection`).
-La sensibilidad (distancia mínima, velocidad mínima, cooldown) se ajusta en
-el constructor de `GestureClassifier`.
+Todo el vocabulario vive en una sola tabla, `GESTURE_COMMANDS` en
+`gesture/GestureCommand.kt`: agregar o remapear un comando es editar esa
+tabla (y agregar su lección en `training/GestureLesson.kt`, que lee de la
+misma tabla para no desincronizarse). `GestureAccessibilityService` solo sabe
+*ejecutar* cada comando, no cuál gesto lo produce. La sensibilidad (distancia
+mínima, velocidad mínima, cooldown) se ajusta en el constructor de
+`GestureClassifier`.
 
 ## Limitaciones importantes (léelo antes de instalar)
 
@@ -155,8 +163,9 @@ Para correr los tests unitarios de la lógica de clasificación de gestos:
 app/src/main/java/com/gesturephonecontrol/app/
 ├── MainActivity.kt                       # UI (Compose): permisos, estado, iniciar/detener
 ├── gesture/
-│   ├── GestureClassifier.kt              # lógica pura: movimiento -> dirección de swipe
+│   ├── GestureClassifier.kt              # lógica pura: movimiento + seña -> GestureEvent
 │   ├── HandPose.kt                       # lógica pura: landmarks -> forma de la mano
+│   ├── GestureCommand.kt                 # tabla única: qué gesto hace qué
 │   ├── GestureEventBus.kt                # bus in-process entre los dos servicios
 │   ├── HandGesturePipeline.kt            # CameraX + MediaPipe HandLandmarker (compartido)
 │   ├── ScreenAwakeController.kt          # evita que la pantalla se apague durante el uso

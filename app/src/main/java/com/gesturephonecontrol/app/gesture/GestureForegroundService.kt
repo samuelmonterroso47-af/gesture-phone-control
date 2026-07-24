@@ -34,7 +34,7 @@ class GestureForegroundService : LifecycleService() {
         screenAwake.acquire()
         pipeline = HandGesturePipeline(
             context = applicationContext,
-            onGesture = { direction -> GestureEventBus.emit(direction) }
+            onGesture = { event -> commandFor(event)?.let(GestureEventBus::emit) }
         )
         pipeline.start(lifecycleOwner = this)
     }

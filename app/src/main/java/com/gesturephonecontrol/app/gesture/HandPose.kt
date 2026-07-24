@@ -10,7 +10,13 @@ enum class HandShape {
     /** Index + middle extended, ring + pinky curled — the deliberate "two fingers" pose. */
     TWO_FINGERS,
 
-    /** Anything else we still track for motion, but that isn't a deliberate pose. */
+    /** All four fingers extended. */
+    OPEN_PALM,
+
+    /** All four fingers curled. */
+    FIST,
+
+    /** Any other combination — tracked for motion, but not a command pose. */
     OTHER
 }
 
@@ -47,10 +53,11 @@ object HandPose {
         val ringUp = isExtended(landmarks, RING)
         val pinkyUp = isExtended(landmarks, PINKY)
 
-        return if (indexUp && middleUp && !ringUp && !pinkyUp) {
-            HandShape.TWO_FINGERS
-        } else {
-            HandShape.OTHER
+        return when {
+            indexUp && middleUp && !ringUp && !pinkyUp -> HandShape.TWO_FINGERS
+            indexUp && middleUp && ringUp && pinkyUp -> HandShape.OPEN_PALM
+            !indexUp && !middleUp && !ringUp && !pinkyUp -> HandShape.FIST
+            else -> HandShape.OTHER
         }
     }
 

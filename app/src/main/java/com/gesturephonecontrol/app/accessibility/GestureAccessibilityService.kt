@@ -8,7 +8,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.view.accessibility.AccessibilityEvent
-import com.gesturephonecontrol.app.gesture.GestureDirection
+import com.gesturephonecontrol.app.gesture.GestureCommand
 import com.gesturephonecontrol.app.gesture.GestureEventBus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,11 +23,9 @@ import kotlinx.coroutines.launch
  * [performGlobalAction] and [dispatchGesture] to services the user explicitly enabled under
  * Settings > Accessibility, which is why these two effects live behind a manual opt-in.
  *
- * Default mapping (see README to change it):
- *  - swipe DOWN  -> pull down the notification shade
- *  - swipe UP    -> synthetic on-screen swipe up (acts like a real scroll/swipe in any app)
- *  - swipe LEFT  -> back
- *  - swipe RIGHT -> recent apps (switch view)
+ * Which gesture produces which command lives in
+ * [com.gesturephonecontrol.app.gesture.GESTURE_COMMANDS]; this class only knows how to carry each
+ * command out.
  */
 class GestureAccessibilityService : AccessibilityService() {
 
@@ -36,7 +34,7 @@ class GestureAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         serviceScope.launch {
-            GestureEventBus.events.collect { direction -> handle(direction) }
+            GestureEventBus.events.collect { command -> handle(command) }
         }
     }
 
@@ -45,12 +43,14 @@ class GestureAccessibilityService : AccessibilityService() {
         super.onDestroy()
     }
 
-    private fun handle(direction: GestureDirection) {
-        when (direction) {
-            GestureDirection.DOWN -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
-            GestureDirection.UP -> dispatchSwipe(fromBottom = true)
-            GestureDirection.LEFT -> performGlobalAction(GLOBAL_ACTION_BACK)
-            GestureDirection.RIGHT -> performGlobalAction(GLOBAL_ACTION_RECENTS)
+    private fun handle(command: GestureCommand) {
+        when (command) {
+            GestureCommand.SCROLL_UP -> dispatchVerticalSwipe(scrollUp = true)
+            GestureCommand.SCROLL_DOWN -> dispatchVerticalSwipe(scrollUp = false)
+            GestureCommand.NOTIFICATIONS -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
+            GestureCommand.BACK -> performGlobalAction(GLOBAL_ACTION_BACK)
+            GestureCommand.RECENTS -> performGlobalAction(GLOBAL_ACTION_RECENTS)
+            GestureCommand.HOME -> performGlobalAction(GLOBAL_ACTION_HOME)
         }
         vibrateConfirmation()
     }
@@ -66,12 +66,15 @@ class GestureAccessibilityService : AccessibilityService() {
         vibrator.vibrate(VibrationEffect.createOneShot(CONFIRMATION_VIBRATION_MS, VibrationEffect.DEFAULT_AMPLITUDE))
     }
 
-    /** Injects a real synthetic touch swipe on the screen, so it works like an actual finger swipe in any app. */
-    private fun dispatchSwipe(fromBottom: Boolean) {
+    /**
+     * Injects a real synthetic touch swipe, so scrolling works like an actual finger in any app.
+     * Scrolling up means dragging the content upward, i.e. the finger travels bottom → top.
+     */
+    private fun dispatchVerticalSwipe(scrollUp: Boolean) {
         val metrics = resources.displayMetrics
         val centerX = metrics.widthPixels / 2f
-        val startY = if (fromBottom) metrics.heightPixels * 0.8f else metrics.heightPixels * 0.2f
-        val endY = if (fromBottom) metrics.heightPixels * 0.2f else metrics.heightPixels * 0.8f
+        val startY = if (scrollUp) metrics.heightPixels * 0.8f else metrics.heightPixels * 0.2f
+        val endY = if (scrollUp) metrics.heightPixels * 0.2f else metrics.heightPixels * 0.8f
 
         val path = Path().apply {
             moveTo(centerX, startY)

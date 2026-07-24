@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.gesturephonecontrol.app.gesture.GestureDirection
+import com.gesturephonecontrol.app.gesture.GestureEvent
 import com.gesturephonecontrol.app.gesture.HandGesturePipeline
 import com.gesturephonecontrol.app.gesture.HandShape
 
@@ -59,7 +60,7 @@ fun GestureTrainingScreen(onFinished: () -> Unit, onExit: () -> Unit) {
     var lessonIndex by remember { mutableIntStateOf(0) }
     var reps by remember { mutableIntStateOf(0) }
     var handShape by remember { mutableStateOf<HandShape?>(null) }
-    var lastWrongGesture by remember { mutableStateOf<GestureDirection?>(null) }
+    var lastWrongGesture by remember { mutableStateOf<GestureEvent?>(null) }
 
     val lesson = GESTURE_LESSONS[lessonIndex]
 
@@ -67,9 +68,9 @@ fun GestureTrainingScreen(onFinished: () -> Unit, onExit: () -> Unit) {
         val pipeline = HandGesturePipeline(
             context = context.applicationContext,
             onHandState = { shape -> handShape = shape },
-            onGesture = { direction ->
+            onGesture = { event ->
                 val current = GESTURE_LESSONS[lessonIndex]
-                if (direction == current.direction) {
+                if (event == current.event) {
                     lastWrongGesture = null
                     reps += 1
                     vibrate(context, 40)
@@ -82,7 +83,7 @@ fun GestureTrainingScreen(onFinished: () -> Unit, onExit: () -> Unit) {
                         }
                     }
                 } else {
-                    lastWrongGesture = direction
+                    lastWrongGesture = event
                 }
             }
         )
@@ -107,8 +108,8 @@ fun GestureTrainingScreen(onFinished: () -> Unit, onExit: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             HandPoseDiagram(
-                direction = lesson.direction,
-                requiredShape = lesson.requiredShape,
+                direction = lesson.event.direction,
+                requiredShape = lesson.event.shape,
                 modifier = Modifier
                     .weight(1f)
                     .aspectRatio(1f)
@@ -126,16 +127,16 @@ fun GestureTrainingScreen(onFinished: () -> Unit, onExit: () -> Unit) {
         Text(text = "1. " + lesson.poseInstruction)
         Text(text = "2. " + lesson.motionInstruction)
         Text(
-            text = "Acción real: " + lesson.actionDescription,
+            text = "Acción real: " + lesson.actionLabel,
             style = MaterialTheme.typography.bodySmall
         )
 
-        HandStatusRow(handShape = handShape, requiredShape = lesson.requiredShape)
+        HandStatusRow(handShape = handShape, requiredShape = lesson.event.shape)
 
         lastWrongGesture?.let {
             Text(
-                text = "Detecté un movimiento hacia ${directionLabel(it)}. Intenta de nuevo, " +
-                    "más recto y más rápido.",
+                text = "Detecté ${shapeLabel(it.shape)} hacia ${directionLabel(it.direction)}. " +
+                    "Intenta de nuevo, más recto y más rápido.",
                 color = Color(0xFFD08A00),
                 style = MaterialTheme.typography.bodySmall
             )
@@ -175,11 +176,11 @@ fun GestureTrainingScreen(onFinished: () -> Unit, onExit: () -> Unit) {
 }
 
 @Composable
-private fun HandStatusRow(handShape: HandShape?, requiredShape: HandShape?) {
+private fun HandStatusRow(handShape: HandShape?, requiredShape: HandShape) {
     val (label, color) = when {
         handShape == null -> "No veo tu mano — acércala a la cámara frontal" to Color(0xFFB00020)
-        requiredShape != null && handShape != requiredShape ->
-            "Veo tu mano, pero aún no la seña correcta (índice + medio)" to Color(0xFFD08A00)
+        handShape != requiredShape ->
+            "Veo tu mano, pero aún no la seña: ${shapeLabel(requiredShape)}" to Color(0xFFD08A00)
         else -> "¡Listo! Ahora haz el movimiento" to Color(0xFF1B873F)
     }
 
@@ -200,6 +201,13 @@ private fun directionLabel(direction: GestureDirection) = when (direction) {
     GestureDirection.DOWN -> "abajo"
     GestureDirection.LEFT -> "la izquierda"
     GestureDirection.RIGHT -> "la derecha"
+}
+
+private fun shapeLabel(shape: HandShape) = when (shape) {
+    HandShape.TWO_FINGERS -> "dos dedos (índice + medio)"
+    HandShape.OPEN_PALM -> "mano abierta"
+    HandShape.FIST -> "puño cerrado"
+    HandShape.OTHER -> "una seña no reconocida"
 }
 
 private fun vibrate(context: android.content.Context, durationMs: Long) {

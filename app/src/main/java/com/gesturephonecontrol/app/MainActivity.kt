@@ -182,8 +182,9 @@ private fun GestureControlScreen(
         }
 
         Text(
-            "Gestos: índice + medio juntos hacia arriba = scroll · mano abierta abajo = " +
-                "notificaciones · a un lado = atrás / cambiar app."
+            "Dos dedos (índice + medio): arriba/abajo = scroll. " +
+                "Mano abierta: abajo = notificaciones, izquierda = atrás, derecha = recientes. " +
+                "Puño arriba = inicio."
         )
     }
 }
