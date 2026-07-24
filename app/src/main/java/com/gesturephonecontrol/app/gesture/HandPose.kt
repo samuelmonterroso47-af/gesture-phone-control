@@ -1,6 +1,8 @@
 package com.gesturephonecontrol.app.gesture
 
 import kotlin.math.abs
+import kotlin.math.acos
+import kotlin.math.sqrt
 
 /**
  * A single hand's 21 landmarks reduced to plain normalized coordinates, so pose logic stays
@@ -49,15 +51,17 @@ sealed interface HandPoseState {
  */
 object HandPose {
 
-    private const val WRIST = 0
     private const val INDEX_MCP = 5
 
-    private data class Finger(val pip: Int, val tip: Int)
+    /** A finger is "extended" when its PIP joint angle (MCP-PIP-TIP) is close to straight. */
+    private const val EXTENDED_ANGLE_DEGREES = 150.0
 
-    private val INDEX = Finger(pip = 6, tip = 8)
-    private val MIDDLE = Finger(pip = 10, tip = 12)
-    private val RING = Finger(pip = 14, tip = 16)
-    private val PINKY = Finger(pip = 18, tip = 20)
+    private data class Finger(val mcp: Int, val pip: Int, val tip: Int)
+
+    private val INDEX = Finger(mcp = 5, pip = 6, tip = 8)
+    private val MIDDLE = Finger(mcp = 9, pip = 10, tip = 12)
+    private val RING = Finger(mcp = 13, pip = 14, tip = 16)
+    private val PINKY = Finger(mcp = 17, pip = 18, tip = 20)
 
     /**
      * @param mirrored whether x coordinates are already flipped to match a selfie view, so that
@@ -98,14 +102,29 @@ object HandPose {
         }
     }
 
+    /**
+     * Whether the finger is straight, by the angle at its PIP joint between the MCP and the tip.
+     * A straight finger reads close to 180°; a curled one folds back toward the palm, well under
+     * that. This is rotation-invariant — unlike comparing tip/pip distance to the wrist, it doesn't
+     * depend on how the hand as a whole is tilted or turned relative to the camera, which is what
+     * let a curled ring/pinky get misread as extended in some poses.
+     */
     private fun isExtended(landmarks: List<Landmark>, finger: Finger): Boolean {
-        val wrist = landmarks[WRIST]
-        return distance(landmarks[finger.tip], wrist) > distance(landmarks[finger.pip], wrist)
-    }
+        val mcp = landmarks[finger.mcp]
+        val pip = landmarks[finger.pip]
+        val tip = landmarks[finger.tip]
 
-    private fun distance(a: Landmark, b: Landmark): Float {
-        val dx = a.x - b.x
-        val dy = a.y - b.y
-        return dx * dx + dy * dy // squared distance is enough for comparisons
+        val v1x = mcp.x - pip.x
+        val v1y = mcp.y - pip.y
+        val v2x = tip.x - pip.x
+        val v2y = tip.y - pip.y
+
+        val mag1 = sqrt(v1x * v1x + v1y * v1y)
+        val mag2 = sqrt(v2x * v2x + v2y * v2y)
+        if (mag1 == 0f || mag2 == 0f) return false
+
+        val cosAngle = ((v1x * v2x + v1y * v2y) / (mag1 * mag2)).coerceIn(-1f, 1f)
+        val angleDegrees = Math.toDegrees(acos(cosAngle).toDouble())
+        return angleDegrees > EXTENDED_ANGLE_DEGREES
     }
 }
